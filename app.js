@@ -79,6 +79,21 @@ function isInCurrentMonth(value, today) {
   return typeof value === "string" && typeof today === "string" && value.slice(0, 7) === today.slice(0, 7);
 }
 
+function noticeAgeInDays(notice) {
+  const sourceValue = notice.created_at || notice.date;
+  if (!sourceValue || !todayValue) {
+    return Number.POSITIVE_INFINITY;
+  }
+
+  const normalizedSource = sourceValue.includes("T") ? sourceValue.slice(0, 10) : sourceValue;
+  return dateDiffInDays(todayValue, normalizedSource);
+}
+
+function isNewNotice(notice) {
+  const age = noticeAgeInDays(notice);
+  return age >= 0 && age <= 2;
+}
+
 function matchesScope(notice) {
   if (!todayValue || activeScope === "all") {
     return true;
@@ -192,12 +207,17 @@ function closeAttachmentModal() {
 
 function buildNoticeCard(notice, boardName = "") {
   const clone = noticeTemplate.content.cloneNode(true);
+  const newIndicator = clone.querySelector(".notice-new-indicator");
   clone.querySelector(".category-pill").textContent = notice.category;
   clone.querySelector(".audience-pill").textContent = boardName ? `${notice.audience} - ${boardName}` : notice.audience;
   clone.querySelector("h3").textContent = notice.title;
   clone.querySelector(".notice-date").textContent = formatDate(notice.date);
   clone.querySelector(".notice-text").textContent = notice.text;
   clone.querySelector(".notice-cta").textContent = notice.pinned ? "Pinned" : "Current";
+
+  if (isNewNotice(notice)) {
+    newIndicator.hidden = false;
+  }
 
   const tagContainer = clone.querySelector(".notice-tags");
   (notice.tags || []).forEach((tag) => {
@@ -322,7 +342,7 @@ function renderTaggedNotices(tag) {
 
 async function loadBoards() {
   try {
-    const response = await fetch("api/boards.php?v=20260602-admin11", {
+    const response = await fetch("api/boards.php?v=20260602-admin13", {
       cache: "no-store"
     });
 
@@ -398,7 +418,7 @@ scopeFilterBar?.querySelectorAll("[data-scope]").forEach((button) => {
 
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
-    navigator.serviceWorker.register("service-worker.js?v=20260602-admin12", {
+    navigator.serviceWorker.register("service-worker.js?v=20260602-admin13", {
       updateViaCache: "none"
     }).then((registration) => {
       if (registration.waiting) {
