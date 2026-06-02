@@ -755,7 +755,10 @@ function group_boards_for_public(?string $clientId = null): array
     }
 
     foreach ($notices as $notice) {
-        if (!is_notice_visible($notice, $today)) {
+        $isActive = is_notice_visible($notice, $today);
+        $isPriorityWindow = is_priority_notice_visible($notice, $today);
+
+        if (!$isActive && !$isPriorityWindow) {
             continue;
         }
 
@@ -780,6 +783,7 @@ function group_boards_for_public(?string $clientId = null): array
             'visible_until' => (string) ($notice['visible_until'] ?? ''),
             'attachment' => $notice['attachment'],
             'reactions' => reaction_summary_for_notice((string) $notice['id'], $clientId),
+            'scope_status' => notice_scope_status($notice, $today),
         ];
     }
 

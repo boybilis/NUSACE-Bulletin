@@ -128,6 +128,14 @@ function matchesScope(notice) {
   return true;
 }
 
+function noticeStatusLabel(notice) {
+  if (notice.scope_status === "scheduled") {
+    return notice.visible_from ? `Upcoming ${formatDate(notice.visible_from)}` : "Upcoming";
+  }
+
+  return notice.pinned ? "Pinned" : "Current";
+}
+
 function filterNotices(notices) {
   return notices.filter((notice) => matchesScope(notice));
 }
@@ -310,7 +318,7 @@ function buildNoticeCard(notice, boardName = "") {
   clone.querySelector("h3").textContent = notice.title;
   clone.querySelector(".notice-date").textContent = formatDate(notice.date);
   clone.querySelector(".notice-text").textContent = notice.text;
-  clone.querySelector(".notice-cta").textContent = notice.pinned ? "Pinned" : "Current";
+  clone.querySelector(".notice-cta").textContent = noticeStatusLabel(notice);
 
   if (isNewNotice(notice)) {
     newIndicator.hidden = false;
@@ -450,7 +458,7 @@ function renderTaggedNotices(tag) {
 
 async function loadBoards() {
   try {
-    const response = await fetch(`api/boards.php?v=20260602-admin16&client_id=${encodeURIComponent(clientId)}`, {
+    const response = await fetch(`api/boards.php?v=20260602-admin18&client_id=${encodeURIComponent(clientId)}`, {
       cache: "no-store"
     });
 
@@ -526,7 +534,7 @@ scopeFilterBar?.querySelectorAll("[data-scope]").forEach((button) => {
 
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
-    navigator.serviceWorker.register("service-worker.js?v=20260602-admin16", {
+    navigator.serviceWorker.register("service-worker.js?v=20260602-admin18", {
       updateViaCache: "none"
     }).then((registration) => {
       if (registration.waiting) {
