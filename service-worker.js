@@ -1,11 +1,13 @@
-const CACHE_NAME = "nusace-bulletin-v8";
+const CACHE_NAME = "nusace-bulletin-v9";
 const APP_ASSETS = [
   "./",
   "./index.html",
   "./manifest.json",
   "./assets/img/NU lipa.png",
-  "./assets/img/icon-192.svg",
-  "./assets/img/icon-512.svg"
+  "./assets/img/icon-192.png",
+  "./assets/img/icon-512.png",
+  "./assets/img/apple-touch-icon.png",
+  "./assets/img/favicon-32.png"
 ];
 
 self.addEventListener("install", (event) => {

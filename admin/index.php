@@ -182,7 +182,7 @@ sort_notices($visibleNotices);
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Admin Dashboard | NU LIPA SACE</title>
-  <link rel="stylesheet" href="/NUSACE-Bulletin/styles.css?v=20260602-admin7">
+  <link rel="stylesheet" href="/NUSACE-Bulletin/styles.css?v=20260602-admin8">
 </head>
 <body class="admin-body">
   <main class="admin-shell">
