@@ -1,0 +1,4 @@
+data/notices.json
+data/users.json
+uploads/attachments/*
+!uploads/attachments/.gitkeep
