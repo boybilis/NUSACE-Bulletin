@@ -388,7 +388,8 @@ main {
 
 .tag-filter-bar,
 .notice-tags,
-.admin-tag-row {
+.admin-tag-row,
+.notice-reactions {
   display: flex;
   gap: 10px;
   flex-wrap: wrap;
@@ -518,6 +519,39 @@ main {
   align-items: center;
   margin-top: 16px;
   font-size: 0.88rem;
+}
+
+.notice-reactions {
+  justify-content: flex-end;
+}
+
+.reaction-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(0, 58, 112, 0.12);
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--navy);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.reaction-btn.is-active {
+  background: rgba(0, 58, 112, 0.1);
+  border-color: rgba(0, 58, 112, 0.24);
+}
+
+.reaction-btn:disabled {
+  opacity: 0.7;
+  cursor: wait;
+}
+
+.reaction-icon,
+.reaction-count {
+  line-height: 1;
 }
 
 .notice-tag {

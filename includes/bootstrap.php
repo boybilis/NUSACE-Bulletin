@@ -101,6 +101,11 @@ function users_path(): string
     return DATA_ROOT . '/users.json';
 }
 
+function reactions_path(): string
+{
+    return DATA_ROOT . '/reactions.json';
+}
+
 function attachment_public_path(string $filename): string
 {
     return 'uploads/attachments/' . ltrim(str_replace('\\', '/', $filename), '/');
@@ -297,6 +302,11 @@ function all_users(): array
     return read_json_file_locked(users_path());
 }
 
+function all_reactions(): array
+{
+    return read_json_file_locked(reactions_path());
+}
+
 function mutate_users(callable $mutator): array
 {
     $path = users_path();
@@ -337,6 +347,46 @@ function mutate_users(callable $mutator): array
     }
 }
 
+function mutate_reactions(callable $mutator): array
+{
+    $path = reactions_path();
+    $handle = fopen($path, 'c+');
+    if ($handle === false) {
+        throw new RuntimeException('Unable to open reaction storage.');
+    }
+
+    try {
+        if (!flock($handle, LOCK_EX)) {
+            throw new RuntimeException('Unable to acquire reaction write lock.');
+        }
+
+        rewind($handle);
+        $content = stream_get_contents($handle);
+        $decoded = ($content === false || $content === '') ? [] : json_decode($content, true);
+        $reactions = is_array($decoded) ? $decoded : [];
+
+        $updatedReactions = $mutator($reactions);
+        if (!is_array($updatedReactions)) {
+            throw new RuntimeException('Reaction mutation failed.');
+        }
+
+        $encoded = json_encode($updatedReactions, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+        if ($encoded === false) {
+            throw new RuntimeException('Unable to encode reaction storage.');
+        }
+
+        ftruncate($handle, 0);
+        rewind($handle);
+        fwrite($handle, $encoded);
+        fflush($handle);
+        flock($handle, LOCK_UN);
+
+        return $updatedReactions;
+    } finally {
+        fclose($handle);
+    }
+}
+
 function normalize_notice_record(array $notice): array
 {
     $notice['created_by'] = (string) ($notice['created_by'] ?? 'system');
@@ -361,6 +411,85 @@ function normalize_notice_record(array $notice): array
     $notice['attachment'] = normalize_attachment_record($notice['attachment'] ?? null);
 
     return $notice;
+}
+
+function normalize_client_id(string $clientId): string
+{
+    $sanitized = preg_replace('/[^A-Za-z0-9_-]/', '', $clientId);
+    return substr((string) $sanitized, 0, 80);
+}
+
+function reaction_types(): array
+{
+    return ['like', 'heart'];
+}
+
+function reaction_summary_for_notice(string $noticeId, ?string $clientId = null): array
+{
+    $summary = [
+        'like' => ['count' => 0, 'reacted' => false],
+        'heart' => ['count' => 0, 'reacted' => false],
+    ];
+
+    $clientId = $clientId !== null ? normalize_client_id($clientId) : null;
+    $all = all_reactions();
+    $noticeReactions = $all[$noticeId] ?? [];
+
+    foreach (reaction_types() as $type) {
+        $clients = $noticeReactions[$type] ?? [];
+        if (!is_array($clients)) {
+            $clients = [];
+        }
+
+        $normalizedClients = array_values(array_unique(array_filter(array_map(
+            static fn ($value): string => normalize_client_id((string) $value),
+            $clients
+        ))));
+
+        $summary[$type]['count'] = count($normalizedClients);
+        $summary[$type]['reacted'] = $clientId !== null && in_array($clientId, $normalizedClients, true);
+    }
+
+    return $summary;
+}
+
+function toggle_notice_reaction(string $noticeId, string $reactionType, string $clientId): array
+{
+    $clientId = normalize_client_id($clientId);
+    if ($clientId === '') {
+        throw new RuntimeException('Invalid client identifier.');
+    }
+
+    if (!in_array($reactionType, reaction_types(), true)) {
+        throw new RuntimeException('Invalid reaction type.');
+    }
+
+    mutate_reactions(static function (array $reactions) use ($noticeId, $reactionType, $clientId): array {
+        $noticeReactions = $reactions[$noticeId] ?? [];
+        $clients = $noticeReactions[$reactionType] ?? [];
+        if (!is_array($clients)) {
+            $clients = [];
+        }
+
+        $clients = array_values(array_unique(array_filter(array_map(
+            static fn ($value): string => normalize_client_id((string) $value),
+            $clients
+        ))));
+
+        $existingIndex = array_search($clientId, $clients, true);
+        if ($existingIndex === false) {
+            $clients[] = $clientId;
+        } else {
+            unset($clients[$existingIndex]);
+            $clients = array_values($clients);
+        }
+
+        $noticeReactions[$reactionType] = $clients;
+        $reactions[$noticeId] = $noticeReactions;
+        return $reactions;
+    });
+
+    return reaction_summary_for_notice($noticeId, $clientId);
 }
 
 function all_notices(): array
@@ -613,7 +742,7 @@ function sort_notices(array &$notices): void
     );
 }
 
-function group_boards_for_public(): array
+function group_boards_for_public(?string $clientId = null): array
 {
     $catalog = board_catalog();
     $notices = all_notices();
@@ -650,13 +779,14 @@ function group_boards_for_public(): array
             'visible_from' => (string) ($notice['visible_from'] ?? ''),
             'visible_until' => (string) ($notice['visible_until'] ?? ''),
             'attachment' => $notice['attachment'],
+            'reactions' => reaction_summary_for_notice((string) $notice['id'], $clientId),
         ];
     }
 
     return array_values($catalog);
 }
 
-function priority_notices_for_public(): array
+function priority_notices_for_public(?string $clientId = null): array
 {
     $catalog = board_catalog();
     $notices = all_notices();
@@ -689,6 +819,7 @@ function priority_notices_for_public(): array
                 'pinned' => (bool) ($notice['pinned'] ?? false),
                 'updated_at' => (string) ($notice['updated_at'] ?? ''),
                 'attachment' => $notice['attachment'],
+                'reactions' => reaction_summary_for_notice((string) $notice['id'], $clientId),
             ];
         },
         $priority

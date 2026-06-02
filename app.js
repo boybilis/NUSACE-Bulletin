@@ -12,6 +12,7 @@ const attachmentModalBody = document.getElementById("attachmentModalBody");
 const attachmentModalName = document.getElementById("attachmentModalName");
 const attachmentModalOpen = document.getElementById("attachmentModalOpen");
 const attachmentModalClose = document.getElementById("attachmentModalClose");
+const CLIENT_ID_KEY = "nusaceBulletinClientId";
 
 let deferredPrompt;
 let boards = [];
@@ -20,6 +21,7 @@ let activeScope = "all";
 let todayValue = null;
 let priorityNotices = [];
 let hasReloadedForUpdate = false;
+const clientId = getClientId();
 
 function compareNotices(left, right) {
   const leftPinned = Boolean(left.pinned);
@@ -48,6 +50,21 @@ function escapeHtml(value) {
 
     return entities[char] || char;
   });
+}
+
+function getClientId() {
+  try {
+    const existing = window.localStorage.getItem(CLIENT_ID_KEY);
+    if (existing) {
+      return existing;
+    }
+
+    const generated = `client-${Date.now()}-${Math.random().toString(36).slice(2, 12)}`;
+    window.localStorage.setItem(CLIENT_ID_KEY, generated);
+    return generated;
+  } catch (error) {
+    return `client-${Date.now()}-fallback`;
+  }
 }
 
 function formatDate(value) {
@@ -208,6 +225,48 @@ function normalizeAttachmentUrl(path) {
   return typeof path === "string" ? path.replace(/^\.?\//, "") : "";
 }
 
+function reactionData(notice, type) {
+  return notice?.reactions?.[type] || { count: 0, reacted: false };
+}
+
+async function toggleReaction(notice, reactionType, reactionButton) {
+  reactionButton.disabled = true;
+
+  try {
+    const response = await fetch("api/reactions.php", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        notice_id: notice.id,
+        reaction_type: reactionType,
+        client_id: clientId
+      })
+    });
+
+    const payload = await response.json();
+    if (!response.ok) {
+      throw new Error(payload.error || `Request failed: ${response.status}`);
+    }
+
+    notice.reactions = payload.reactions || notice.reactions || {};
+    updateReactionButton(reactionButton, reactionData(notice, reactionType));
+  } catch (error) {
+    window.alert(error.message);
+  } finally {
+    reactionButton.disabled = false;
+  }
+}
+
+function updateReactionButton(button, state) {
+  button.classList.toggle("is-active", Boolean(state?.reacted));
+  const countNode = button.querySelector(".reaction-count");
+  if (countNode) {
+    countNode.textContent = String(state?.count || 0);
+  }
+}
+
 function openAttachmentModal(attachment) {
   if (!attachmentModal || !attachmentModalBody || !attachmentModalName || !attachmentModalOpen) {
     return;
@@ -269,6 +328,12 @@ function buildNoticeCard(notice, boardName = "") {
     attachmentButton.textContent = `Attachment: ${notice.attachment.name || "View file"}`;
     attachmentButton.addEventListener("click", () => openAttachmentModal(notice.attachment));
   }
+
+  clone.querySelectorAll(".reaction-btn").forEach((button) => {
+    const reactionType = button.getAttribute("data-reaction-type") || "";
+    updateReactionButton(button, reactionData(notice, reactionType));
+    button.addEventListener("click", () => toggleReaction(notice, reactionType, button));
+  });
 
   return clone;
 }
@@ -385,7 +450,7 @@ function renderTaggedNotices(tag) {
 
 async function loadBoards() {
   try {
-    const response = await fetch("api/boards.php?v=20260602-admin15", {
+    const response = await fetch(`api/boards.php?v=20260602-admin16&client_id=${encodeURIComponent(clientId)}`, {
       cache: "no-store"
     });
 
@@ -461,7 +526,7 @@ scopeFilterBar?.querySelectorAll("[data-scope]").forEach((button) => {
 
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
-    navigator.serviceWorker.register("service-worker.js?v=20260602-admin15", {
+    navigator.serviceWorker.register("service-worker.js?v=20260602-admin16", {
       updateViaCache: "none"
     }).then((registration) => {
       if (registration.waiting) {
