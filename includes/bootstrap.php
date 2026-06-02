@@ -157,7 +157,47 @@ function write_json_file(string $path, array $payload): void
 
 function all_users(): array
 {
-    return read_json_file(users_path());
+    return read_json_file_locked(users_path());
+}
+
+function mutate_users(callable $mutator): array
+{
+    $path = users_path();
+    $handle = fopen($path, 'c+');
+    if ($handle === false) {
+        throw new RuntimeException('Unable to open user storage.');
+    }
+
+    try {
+        if (!flock($handle, LOCK_EX)) {
+            throw new RuntimeException('Unable to acquire user write lock.');
+        }
+
+        rewind($handle);
+        $content = stream_get_contents($handle);
+        $decoded = ($content === false || $content === '') ? [] : json_decode($content, true);
+        $users = is_array($decoded) ? $decoded : [];
+
+        $updatedUsers = $mutator($users);
+        if (!is_array($updatedUsers)) {
+            throw new RuntimeException('User mutation failed.');
+        }
+
+        $encoded = json_encode($updatedUsers, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+        if ($encoded === false) {
+            throw new RuntimeException('Unable to encode user storage.');
+        }
+
+        ftruncate($handle, 0);
+        rewind($handle);
+        fwrite($handle, $encoded);
+        fflush($handle);
+        flock($handle, LOCK_UN);
+
+        return $updatedUsers;
+    } finally {
+        fclose($handle);
+    }
 }
 
 function normalize_notice_record(array $notice): array
@@ -333,6 +373,42 @@ function can_manage_board(array $user, string $boardId): bool
 function can_edit_notice(array $user, array $notice): bool
 {
     return ($notice['created_by'] ?? '') === ($user['username'] ?? '');
+}
+
+function find_user_by_username(array $users, string $username): ?array
+{
+    foreach ($users as $user) {
+        if (($user['username'] ?? '') === $username) {
+            return $user;
+        }
+    }
+
+    return null;
+}
+
+function update_notice_owner_references(string $fromUsername, string $toUsername, string $toName): void
+{
+    if ($fromUsername === $toUsername) {
+        mutate_notices(static function (array $notices) use ($toUsername, $toName): array {
+            foreach ($notices as $index => $notice) {
+                if (($notice['created_by'] ?? '') === $toUsername) {
+                    $notices[$index]['created_by_name'] = $toName;
+                }
+            }
+            return $notices;
+        });
+        return;
+    }
+
+    mutate_notices(static function (array $notices) use ($fromUsername, $toUsername, $toName): array {
+        foreach ($notices as $index => $notice) {
+            if (($notice['created_by'] ?? '') === $fromUsername) {
+                $notices[$index]['created_by'] = $toUsername;
+                $notices[$index]['created_by_name'] = $toName;
+            }
+        }
+        return $notices;
+    });
 }
 
 function accessible_boards(array $user): array

@@ -11,6 +11,7 @@ $boardCatalog = board_catalog();
 $noticeCategories = notice_categories();
 $availableBoards = accessible_boards($user);
 $allNotices = all_notices();
+$allUsers = all_users();
 $today = today_ymd();
 $formNotice = [
     'id' => '',
@@ -32,6 +33,7 @@ $formNotice = [
 $editing = false;
 $error = '';
 $success = '';
+$accountSuccess = '';
 
 try {
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -123,6 +125,104 @@ try {
             exit;
         }
 
+        if ($action === 'update_account') {
+            $currentPassword = (string) ($_POST['current_password'] ?? '');
+            $newUsername = trim((string) ($_POST['new_username'] ?? ''));
+            $newPassword = (string) ($_POST['new_password'] ?? '');
+            $confirmPassword = (string) ($_POST['confirm_password'] ?? '');
+
+            if ($newUsername === '') {
+                throw new RuntimeException('Username is required.');
+            }
+
+            $freshUsers = all_users();
+            $currentRecord = find_user_by_username($freshUsers, (string) $user['username']);
+            if ($currentRecord === null) {
+                throw new RuntimeException('Unable to locate your account.');
+            }
+
+            if (!password_verify($currentPassword, (string) $currentRecord['password_hash'])) {
+                throw new RuntimeException('Current password is incorrect.');
+            }
+
+            if ($newPassword !== '' && $newPassword !== $confirmPassword) {
+                throw new RuntimeException('New password and confirmation do not match.');
+            }
+
+            mutate_users(function (array $users) use ($user, $newUsername, $newPassword): array {
+                foreach ($users as $index => $record) {
+                    if (($record['username'] ?? '') !== ($user['username'] ?? '')) {
+                        if (($record['username'] ?? '') === $newUsername) {
+                            throw new RuntimeException('That username is already in use.');
+                        }
+                        continue;
+                    }
+
+                    $users[$index]['username'] = $newUsername;
+                    if ($newPassword !== '') {
+                        $users[$index]['password_hash'] = password_hash($newPassword, PASSWORD_DEFAULT);
+                    }
+                    return $users;
+                }
+
+                throw new RuntimeException('Unable to update your account.');
+            });
+
+            update_notice_owner_references((string) $user['username'], $newUsername, (string) $user['name']);
+            $refreshedUsers = all_users();
+            $updatedRecord = find_user_by_username($refreshedUsers, $newUsername);
+            if ($updatedRecord !== null) {
+                login_user($updatedRecord);
+            }
+
+            header('Location: index.php?account_success=Account updated');
+            exit;
+        }
+
+        if ($action === 'reset_program_chair_account') {
+            if (($user['role'] ?? '') !== 'dean') {
+                throw new RuntimeException('Only the Dean can reset program chair accounts.');
+            }
+
+            $targetUsername = trim((string) ($_POST['target_username'] ?? ''));
+            $targetRecord = find_user_by_username($allUsers, $targetUsername);
+            if ($targetRecord === null) {
+                throw new RuntimeException('Program chair account not found.');
+            }
+
+            if (($targetRecord['role'] ?? '') !== 'program_chair') {
+                throw new RuntimeException('Only program chair accounts can be reset here.');
+            }
+
+            $defaultUsername = (string) ($targetRecord['default_username'] ?? $targetRecord['username']);
+            $defaultPasswordHash = (string) ($targetRecord['default_password_hash'] ?? $targetRecord['password_hash']);
+            $targetName = (string) ($targetRecord['name'] ?? '');
+
+            mutate_users(function (array $users) use ($targetUsername, $defaultUsername, $defaultPasswordHash): array {
+                foreach ($users as $index => $record) {
+                    if (($record['username'] ?? '') === $defaultUsername && ($record['username'] ?? '') !== $targetUsername) {
+                        throw new RuntimeException('The default username is currently used by another account.');
+                    }
+                }
+
+                foreach ($users as $index => $record) {
+                    if (($record['username'] ?? '') !== $targetUsername) {
+                        continue;
+                    }
+
+                    $users[$index]['username'] = $defaultUsername;
+                    $users[$index]['password_hash'] = $defaultPasswordHash;
+                    return $users;
+                }
+
+                throw new RuntimeException('Unable to reset the selected account.');
+            });
+
+            update_notice_owner_references($targetUsername, $defaultUsername, $targetName);
+            header('Location: index.php?account_success=Program chair account reset');
+            exit;
+        }
+
         if ($action === 'delete_notice') {
             $noticeId = trim((string) ($_POST['notice_id'] ?? ''));
 
@@ -168,6 +268,7 @@ if (isset($_GET['edit'])) {
 }
 
 $success = trim((string) ($_GET['success'] ?? ''));
+$accountSuccess = trim((string) ($_GET['account_success'] ?? ''));
 
 $visibleNotices = array_values(array_filter(
     $allNotices,
@@ -208,6 +309,10 @@ sort_notices($visibleNotices);
 
     <?php if ($success !== ''): ?>
       <p class="admin-success"><?= e($success) ?></p>
+    <?php endif; ?>
+
+    <?php if ($accountSuccess !== ''): ?>
+      <p class="admin-success"><?= e($accountSuccess) ?></p>
     <?php endif; ?>
 
     <section class="admin-grid">
@@ -335,6 +440,72 @@ sort_notices($visibleNotices);
           <?php endforeach; ?>
         </div>
       </article>
+    </section>
+
+    <section class="admin-grid">
+      <article class="admin-editor glass-panel">
+        <p class="eyebrow">Account Settings</p>
+        <h2>Update your username and password</h2>
+        <form method="post" class="admin-form-stack">
+          <input type="hidden" name="csrf_token" value="<?= e(csrf_token()) ?>">
+          <input type="hidden" name="action" value="update_account">
+
+          <label class="admin-field">
+            <span>Username</span>
+            <input type="text" name="new_username" value="<?= e((string) $user['username']) ?>" required>
+          </label>
+
+          <label class="admin-field">
+            <span>Current Password</span>
+            <input type="password" name="current_password" required>
+          </label>
+
+          <label class="admin-field">
+            <span>New Password</span>
+            <input type="password" name="new_password">
+            <small class="admin-field-help">Leave blank if you only want to change the username.</small>
+          </label>
+
+          <label class="admin-field">
+            <span>Confirm New Password</span>
+            <input type="password" name="confirm_password">
+          </label>
+
+          <div class="admin-actions">
+            <button type="submit" class="install-btn admin-submit">Update Account</button>
+          </div>
+        </form>
+      </article>
+
+      <?php if (($user['role'] ?? '') === 'dean'): ?>
+        <article class="admin-list glass-panel">
+          <p class="eyebrow">Dean Controls</p>
+          <h2>Reset program chair accounts</h2>
+          <div class="admin-notice-list">
+            <?php foreach ($allUsers as $account): ?>
+              <?php if (($account['role'] ?? '') !== 'program_chair'): ?>
+                <?php continue; ?>
+              <?php endif; ?>
+              <article class="admin-notice-item">
+                <div class="admin-notice-head">
+                  <div>
+                    <p class="admin-notice-board"><?= e((string) $account['name']) ?></p>
+                    <h3><?= e((string) $account['username']) ?></h3>
+                  </div>
+                </div>
+                <p class="admin-notice-meta">Reset username to <?= e((string) ($account['default_username'] ?? $account['username'])) ?></p>
+                <p class="admin-notice-meta">Reset password to the current default program chair password.</p>
+                <form method="post" class="admin-inline-form" onsubmit="return confirm('Reset this program chair account to its default username and password?');">
+                  <input type="hidden" name="csrf_token" value="<?= e(csrf_token()) ?>">
+                  <input type="hidden" name="action" value="reset_program_chair_account">
+                  <input type="hidden" name="target_username" value="<?= e((string) $account['username']) ?>">
+                  <button type="submit" class="admin-delete-btn">Reset Account</button>
+                </form>
+              </article>
+            <?php endforeach; ?>
+          </div>
+        </article>
+      <?php endif; ?>
     </section>
   </main>
 </body>

@@ -3,6 +3,8 @@
         "username": "dean",
         "name": "SACE Dean",
         "role": "dean",
+        "default_username": "dean",
+        "default_password_hash": "$2y$10$N4drRGJT7fJg34Lnfv7VEe1Ql5xlkIh2lY0.3VsYOcHNvhEOs8f/y",
         "board_ids": [
             "sace",
             "architecture",
@@ -18,6 +20,8 @@
         "username": "chair.architecture",
         "name": "Architecture Program Chair",
         "role": "program_chair",
+        "default_username": "chair.architecture",
+        "default_password_hash": "$2y$10$oChZuMBnkJhmuEXdRQyFW.DuRJzLDWUo5ywNLfI.sDaz1GgACUWHy",
         "board_ids": [
             "architecture"
         ],
@@ -27,6 +31,8 @@
         "username": "chair.computer-science",
         "name": "BS Computer Science Program Chair",
         "role": "program_chair",
+        "default_username": "chair.computer-science",
+        "default_password_hash": "$2y$10$oChZuMBnkJhmuEXdRQyFW.DuRJzLDWUo5ywNLfI.sDaz1GgACUWHy",
         "board_ids": [
             "computer-science"
         ],
@@ -36,6 +42,8 @@
         "username": "chair.information-technology",
         "name": "BS Information Technology Program Chair",
         "role": "program_chair",
+        "default_username": "chair.information-technology",
+        "default_password_hash": "$2y$10$oChZuMBnkJhmuEXdRQyFW.DuRJzLDWUo5ywNLfI.sDaz1GgACUWHy",
         "board_ids": [
             "information-technology"
         ],
@@ -45,6 +53,8 @@
         "username": "chair.engineering",
         "name": "Engineering Program Chair",
         "role": "program_chair",
+        "default_username": "chair.engineering",
+        "default_password_hash": "$2y$10$oChZuMBnkJhmuEXdRQyFW.DuRJzLDWUo5ywNLfI.sDaz1GgACUWHy",
         "board_ids": [
             "engineering"
         ],
@@ -54,6 +64,8 @@
         "username": "chair.mma",
         "name": "Multimedia Arts Program Chair",
         "role": "program_chair",
+        "default_username": "chair.mma",
+        "default_password_hash": "$2y$10$oChZuMBnkJhmuEXdRQyFW.DuRJzLDWUo5ywNLfI.sDaz1GgACUWHy",
         "board_ids": [
             "mma"
         ],
@@ -63,6 +75,8 @@
         "username": "chair.cpe",
         "name": "Computer Engineering Program Chair",
         "role": "program_chair",
+        "default_username": "chair.cpe",
+        "default_password_hash": "$2y$10$oChZuMBnkJhmuEXdRQyFW.DuRJzLDWUo5ywNLfI.sDaz1GgACUWHy",
         "board_ids": [
             "cpe"
         ],
