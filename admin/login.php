@@ -40,6 +40,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 </head>
 <body class="admin-body">
   <main class="admin-shell admin-login-shell">
+    <div class="admin-login-toplink">
+      <a class="secondary-link" href="../index.html">Back to Home</a>
+    </div>
     <section class="admin-login-card glass-panel">
       <p class="eyebrow">Bulletin Administrator Access</p>
       <h1>NU LIPA SACE Bulletin Board</h1>
@@ -60,10 +63,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         </label>
         <button type="submit" class="install-btn admin-submit">Sign In</button>
       </form>
-
-      <div class="admin-actions">
-        <a class="secondary-link" href="../index.html">Back to Home</a>
-      </div>
 
       <div class="admin-login-help">
         <p><strong>Default accounts</strong></p>

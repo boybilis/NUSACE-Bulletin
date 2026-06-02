@@ -495,8 +495,16 @@ main {
 
 .admin-login-shell {
   min-height: 100vh;
-  display: grid;
-  place-items: center;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.admin-login-toplink {
+  width: min(100%, 560px);
+  display: flex;
+  justify-content: flex-end;
+  margin: 0 auto 12px;
 }
 
 .admin-login-card,
