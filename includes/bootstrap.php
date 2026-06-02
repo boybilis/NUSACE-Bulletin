@@ -237,6 +237,16 @@ function today_ymd(): string
     return date('Y-m-d');
 }
 
+function shift_ymd(string $date, int $days): string
+{
+    $timestamp = strtotime($date . ' 00:00:00');
+    if ($timestamp === false) {
+        return $date;
+    }
+
+    return date('Y-m-d', strtotime(($days >= 0 ? '+' : '') . $days . ' days', $timestamp));
+}
+
 function is_notice_visible(array $notice, ?string $today = null): bool
 {
     $today ??= today_ymd();
@@ -261,6 +271,16 @@ function notice_scope_status(array $notice, ?string $today = null): string
     }
 
     return 'active';
+}
+
+function is_priority_notice_visible(array $notice, ?string $today = null): bool
+{
+    $today ??= today_ymd();
+    $visibleFrom = (string) ($notice['visible_from'] ?? '0001-01-01');
+    $visibleUntil = (string) ($notice['visible_until'] ?? '9999-12-31');
+    $priorityStart = shift_ymd($visibleFrom, -7);
+
+    return $priorityStart <= $today && $today <= $visibleUntil;
 }
 
 function current_user(): ?array
@@ -418,6 +438,43 @@ function group_boards_for_public(): array
     }
 
     return array_values($catalog);
+}
+
+function priority_notices_for_public(): array
+{
+    $catalog = board_catalog();
+    $notices = all_notices();
+    $today = today_ymd();
+
+    $priority = array_values(array_filter(
+        $notices,
+        static fn (array $notice): bool => is_priority_notice_visible($notice, $today)
+    ));
+
+    sort_notices($priority);
+
+    return array_map(
+        static function (array $notice) use ($catalog): array {
+            $boardId = (string) ($notice['board_id'] ?? '');
+            return [
+                'id' => $notice['id'],
+                'board_id' => $boardId,
+                'board_name' => $catalog[$boardId]['name'] ?? $boardId,
+                'category' => $notice['category'],
+                'audience' => $notice['audience'],
+                'title' => $notice['title'],
+                'date' => $notice['date'],
+                'visible_from' => $notice['visible_from'],
+                'visible_until' => $notice['visible_until'],
+                'text' => $notice['text'],
+                'tag' => $notice['tag'],
+                'tags' => $notice['tags'],
+                'pinned' => (bool) ($notice['pinned'] ?? false),
+                'updated_at' => (string) ($notice['updated_at'] ?? ''),
+            ];
+        },
+        $priority
+    );
 }
 
 function e(string $value): string

@@ -13,6 +13,7 @@ let boards = [];
 let activeTag = null;
 let activeScope = "all";
 let todayValue = null;
+let priorityNotices = [];
 
 function compareNotices(left, right) {
   const leftPinned = Boolean(left.pinned);
@@ -94,18 +95,7 @@ function filterNotices(notices) {
 }
 
 function renderHighlights() {
-  const featured = filterNotices(
-    boards.flatMap((board) =>
-      board.notices.map((notice) => ({
-        board: board.name,
-        title: notice.title,
-        text: notice.text,
-        date: notice.date,
-        pinned: Boolean(notice.pinned),
-        updated_at: notice.updated_at || ""
-      }))
-    )
-  )
+  const featured = [...priorityNotices]
     .sort(compareNotices)
     .slice(0, 4);
 
@@ -113,10 +103,10 @@ function renderHighlights() {
     .map(
       (item) => `
         <article class="highlight-card">
-          <span class="eyebrow">${escapeHtml(item.board)}</span>
+          <span class="eyebrow">${escapeHtml(item.board_name || item.board || "")}</span>
           <h3>${escapeHtml(item.title)}</h3>
           <p>${escapeHtml(item.text)}</p>
-          <p class="notice-date">${item.pinned ? "Pinned" : escapeHtml(formatDate(item.date))}</p>
+          <p class="notice-date">${item.pinned ? "Pinned" : `Visible ${escapeHtml(formatDate(item.visible_from || item.date))}`}</p>
         </article>
       `
     )
@@ -289,6 +279,7 @@ async function loadBoards() {
 
     const payload = await response.json();
     boards = Array.isArray(payload.boards) ? payload.boards : [];
+    priorityNotices = Array.isArray(payload.priorityNotices) ? payload.priorityNotices : [];
     todayValue = payload.today || null;
     renderHighlights();
     renderBoard(payload.defaultBoardId || "sace");
