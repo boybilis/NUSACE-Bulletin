@@ -19,6 +19,7 @@ let activeTag = null;
 let activeScope = "all";
 let todayValue = null;
 let priorityNotices = [];
+let hasReloadedForUpdate = false;
 
 function compareNotices(left, right) {
   const leftPinned = Boolean(left.pinned);
@@ -397,7 +398,37 @@ scopeFilterBar?.querySelectorAll("[data-scope]").forEach((button) => {
 
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
-    navigator.serviceWorker.register("service-worker.js");
+    navigator.serviceWorker.register("service-worker.js?v=20260602-admin12", {
+      updateViaCache: "none"
+    }).then((registration) => {
+      if (registration.waiting) {
+        registration.waiting.postMessage({ type: "SKIP_WAITING" });
+      }
+
+      registration.addEventListener("updatefound", () => {
+        const newWorker = registration.installing;
+        if (!newWorker) {
+          return;
+        }
+
+        newWorker.addEventListener("statechange", () => {
+          if (newWorker.state === "installed" && navigator.serviceWorker.controller) {
+            newWorker.postMessage({ type: "SKIP_WAITING" });
+          }
+        });
+      });
+
+      registration.update().catch(() => {});
+    }).catch(() => {});
+  });
+
+  navigator.serviceWorker.addEventListener("controllerchange", () => {
+    if (hasReloadedForUpdate) {
+      return;
+    }
+
+    hasReloadedForUpdate = true;
+    window.location.reload();
   });
 }
 

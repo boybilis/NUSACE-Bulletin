@@ -1,4 +1,4 @@
-const CACHE_NAME = "nusace-bulletin-v12";
+const CACHE_NAME = "nusace-bulletin-v13";
 const APP_ASSETS = [
   "./",
   "./index.html",
@@ -12,10 +12,33 @@ const APP_ASSETS = [
   "./assets/img/favicon-32.png"
 ];
 
+async function networkFirst(request) {
+  const cache = await caches.open(CACHE_NAME);
+
+  try {
+    const networkRequest = new Request(request, { cache: "no-store" });
+    const networkResponse = await fetch(networkRequest);
+
+    if (networkResponse && networkResponse.ok) {
+      cache.put(request, networkResponse.clone());
+    }
+
+    return networkResponse;
+  } catch (error) {
+    const cachedResponse = await caches.match(request);
+    if (cachedResponse) {
+      return cachedResponse;
+    }
+
+    throw error;
+  }
+}
+
 self.addEventListener("install", (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => cache.addAll(APP_ASSETS))
   );
+  self.skipWaiting();
 });
 
 self.addEventListener("activate", (event) => {
@@ -30,25 +53,24 @@ self.addEventListener("activate", (event) => {
   );
 });
 
+self.addEventListener("message", (event) => {
+  if (event.data && event.data.type === "SKIP_WAITING") {
+    self.skipWaiting();
+  }
+});
+
 self.addEventListener("fetch", (event) => {
   const requestUrl = new URL(event.request.url);
   const isSameOrigin = requestUrl.origin === self.location.origin;
+  const isNavigation = event.request.mode === "navigate";
   const isCodeAsset =
     isSameOrigin &&
     (requestUrl.pathname.endsWith(".css") ||
       requestUrl.pathname.endsWith(".js") ||
       requestUrl.pathname.endsWith(".html"));
 
-  if (isCodeAsset) {
-    event.respondWith(
-      fetch(event.request)
-        .then((networkResponse) => {
-          const responseClone = networkResponse.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, responseClone));
-          return networkResponse;
-        })
-        .catch(() => caches.match(event.request))
-    );
+  if (isNavigation || isCodeAsset) {
+    event.respondWith(networkFirst(event.request));
     return;
   }
 
