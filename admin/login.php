@@ -61,6 +61,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         <button type="submit" class="install-btn admin-submit">Sign In</button>
       </form>
 
+      <div class="admin-actions">
+        <a class="secondary-link" href="../index.html">Back to Home</a>
+      </div>
+
       <div class="admin-login-help">
         <p><strong>Default accounts</strong></p>
         <p>The Dean account uses the `dean` username. Program chair usernames follow `chair.architecture`, `chair.computer-science`, `chair.information-technology`, `chair.engineering`, `chair.mma`, and `chair.cpe`.</p>
