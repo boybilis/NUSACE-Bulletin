@@ -305,39 +305,6 @@
         "created_at": "",
         "updated_at": ""
     },
-    {
-        "id": "notice_6a1e3c228a34f9.14573198",
-        "board_id": "information-technology",
-        "category": "Examination Schedule",
-        "audience": "Faculty and Students",
-        "title": "Final examination schedule for Third Term AY 2025-2026",
-        "date": "2026-06-02",
-        "text": "Final Examinations: June 1-6\nGrade Consultation: June 8-9\nDeadline for Grade Encoding: June 10",
-        "tag": "examination, faculty, students",
-        "tags": [
-            "examination",
-            "faculty",
-            "students"
-        ],
-        "pinned": true,
-        "created_at": "",
-        "updated_at": "2026-06-02T02:25:30+00:00"
-    },
-    {
-        "id": "notice_6a1e41b56020c8.55055714",
-        "board_id": "information-technology",
-        "category": "Examination Schedule",
-        "audience": "Faculty and Students",
-        "title": "Midterm examination schedule",
-        "date": "2026-06-02",
-        "text": "Midterm Examinations: August 24-28, 2026",
-        "tag": "examination, schedule",
-        "tags": [
-            "examination",
-            "schedule"
-        ],
-        "pinned": true,
-        "created_at": "2026-06-02T02:36:37+00:00",
-        "updated_at": "2026-06-02T02:36:37+00:00"
-    }
+    
+    
 ]
