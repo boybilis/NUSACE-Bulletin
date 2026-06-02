@@ -115,6 +115,32 @@ function filterNotices(notices) {
   return notices.filter((notice) => matchesScope(notice));
 }
 
+function topTagsFromNotices(notices, limit = 3) {
+  const counts = new Map();
+
+  notices.forEach((notice) => {
+    (notice.tags || []).forEach((tag) => {
+      const normalizedTag = String(tag || "").trim();
+      if (!normalizedTag) {
+        return;
+      }
+
+      counts.set(normalizedTag, (counts.get(normalizedTag) || 0) + 1);
+    });
+  });
+
+  return [...counts.entries()]
+    .sort((left, right) => {
+      if (right[1] !== left[1]) {
+        return right[1] - left[1];
+      }
+
+      return left[0].localeCompare(right[0]);
+    })
+    .slice(0, limit)
+    .map(([tag]) => tag);
+}
+
 function renderHighlights() {
   const featured = [...priorityNotices]
     .sort(compareNotices)
@@ -280,6 +306,7 @@ function renderBoard(boardId) {
   renderTabs(activeBoard.id);
 
   const visibleNotices = filterNotices([...activeBoard.notices]).sort(compareNotices);
+  const topTags = topTagsFromNotices(visibleNotices);
 
   if (visibleNotices.length === 0) {
     renderEmptyBoard("There are no active notices for the selected board within the current filter scope.");
@@ -295,7 +322,7 @@ function renderBoard(boardId) {
           <p>${escapeHtml(activeBoard.tone)}</p>
         </div>
         <div class="pill-row">
-          ${activeBoard.highlights.map((item) => `<span class="pill">${escapeHtml(item)}</span>`).join("")}
+          ${topTags.map((item) => `<button type="button" class="pill board-tag-pill" data-board-tag="${escapeHtml(item)}">${escapeHtml(item)}</button>`).join("")}
         </div>
       </div>
       <div class="notice-grid" id="noticeGrid"></div>
@@ -305,6 +332,10 @@ function renderBoard(boardId) {
   const noticeGrid = document.getElementById("noticeGrid");
   visibleNotices.forEach((notice) => {
     noticeGrid.appendChild(buildNoticeCard(notice));
+  });
+
+  boardPanel.querySelectorAll("[data-board-tag]").forEach((button) => {
+    button.addEventListener("click", () => renderTaggedNotices(button.getAttribute("data-board-tag") || ""));
   });
 }
 
@@ -354,7 +385,7 @@ function renderTaggedNotices(tag) {
 
 async function loadBoards() {
   try {
-    const response = await fetch("api/boards.php?v=20260602-admin14", {
+    const response = await fetch("api/boards.php?v=20260602-admin15", {
       cache: "no-store"
     });
 
@@ -430,7 +461,7 @@ scopeFilterBar?.querySelectorAll("[data-scope]").forEach((button) => {
 
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
-    navigator.serviceWorker.register("service-worker.js?v=20260602-admin14", {
+    navigator.serviceWorker.register("service-worker.js?v=20260602-admin15", {
       updateViaCache: "none"
     }).then((registration) => {
       if (registration.waiting) {

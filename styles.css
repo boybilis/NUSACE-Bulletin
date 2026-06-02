@@ -359,6 +359,12 @@ main {
   font-size: 0.86rem;
 }
 
+.board-tag-pill {
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
 .tag-chip,
 .tag-filter-clear {
   display: inline-flex;
