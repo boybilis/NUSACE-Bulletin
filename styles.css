@@ -464,6 +464,13 @@ main {
   font-size: 0.94rem;
 }
 
+.notice-card .notice-date {
+  margin-top: -2px;
+  color: rgba(16, 35, 59, 0.56);
+  font-size: 0.82rem;
+  font-weight: 500;
+}
+
 .notice-text {
   margin-top: 12px;
   white-space: pre-line;
