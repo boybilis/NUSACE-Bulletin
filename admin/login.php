@@ -36,7 +36,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Admin Login | NU LIPA SACE</title>
-  <link rel="stylesheet" href="/NUSACE-Bulletin/styles.css?v=20260602-admin6">
+  <link rel="stylesheet" href="/NUSACE-Bulletin/styles.css?v=20260602-admin7">
 </head>
 <body class="admin-body">
   <main class="admin-shell admin-login-shell">

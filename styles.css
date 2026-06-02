@@ -99,8 +99,9 @@ body::before {
 .topbar h1 {
   max-width: 720px;
   font-family: "Fraunces", serif;
-  font-size: clamp(2.8rem, 6vw, 5.4rem);
-  line-height: 0.98;
+  font-size: clamp(2rem, 4vw, 3.1rem);
+  font-weight: 700;
+  line-height: 1.08;
 }
 
 .brand-lockup {
@@ -711,6 +712,15 @@ main {
 @media (max-width: 720px) {
   .page-shell {
     padding: 18px;
+  }
+
+  .hero-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .topbar h1 {
+    font-size: 1.7rem;
+    line-height: 1.12;
   }
 
   .topbar,

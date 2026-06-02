@@ -279,7 +279,7 @@ function renderTaggedNotices(tag) {
 
 async function loadBoards() {
   try {
-    const response = await fetch("api/boards.php?v=20260602-admin6", {
+    const response = await fetch("api/boards.php?v=20260602-admin7", {
       cache: "no-store"
     });
 
