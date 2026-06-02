@@ -34,6 +34,7 @@ $editing = false;
 $error = '';
 $success = '';
 $accountSuccess = '';
+$uploadedAttachmentForCleanup = null;
 
 try {
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -43,6 +44,21 @@ try {
         if ($action === 'save_notice') {
             $noticeId = trim((string) ($_POST['notice_id'] ?? ''));
             $boardId = trim((string) ($_POST['board_id'] ?? ''));
+            $existingNotice = $noticeId !== '' ? find_notice_by_id($allNotices, $noticeId) : null;
+            $existingAttachment = normalize_attachment_record($existingNotice['attachment'] ?? null);
+            $attachment = $existingAttachment;
+            $removeAttachment = isset($_POST['remove_attachment']);
+
+            if ($removeAttachment) {
+                $attachment = null;
+            }
+
+            $uploadError = (int) ($_FILES['attachment']['error'] ?? UPLOAD_ERR_NO_FILE);
+            if ($uploadError !== UPLOAD_ERR_NO_FILE) {
+                $attachment = store_uploaded_attachment($_FILES['attachment']);
+                $uploadedAttachmentForCleanup = $attachment;
+            }
+
             $payload = [
                 'id' => $noticeId !== '' ? $noticeId : uniqid('notice_', true),
                 'board_id' => $boardId,
@@ -62,6 +78,7 @@ try {
                 'pinned' => isset($_POST['pinned']),
                 'created_at' => gmdate('c'),
                 'updated_at' => gmdate('c'),
+                'attachment' => $attachment,
             ];
             $payload['tag'] = implode(', ', $payload['tags']);
 
@@ -89,7 +106,9 @@ try {
 
             $originalUpdatedAt = trim((string) ($_POST['original_updated_at'] ?? ''));
 
-            mutate_notices(function (array $notices) use ($payload, $user, $originalUpdatedAt): array {
+            $attachmentToDeleteAfterSave = null;
+
+            mutate_notices(function (array $notices) use ($payload, $user, $originalUpdatedAt, $existingAttachment, $attachment, &$attachmentToDeleteAfterSave): array {
                 $updated = false;
 
                 foreach ($notices as $index => $notice) {
@@ -109,6 +128,10 @@ try {
                     $payload['created_at'] = (string) ($notice['created_at'] ?? '');
                     $payload['created_by'] = (string) ($notice['created_by'] ?? $user['username']);
                     $payload['created_by_name'] = (string) ($notice['created_by_name'] ?? $user['name']);
+                    $currentAttachment = normalize_attachment_record($notice['attachment'] ?? null);
+                    if ($attachment !== $currentAttachment) {
+                        $attachmentToDeleteAfterSave = $currentAttachment;
+                    }
                     $notices[$index] = $payload;
                     $updated = true;
                     break;
@@ -120,6 +143,10 @@ try {
 
                 return $notices;
             });
+
+            if ($attachmentToDeleteAfterSave !== null && $attachmentToDeleteAfterSave !== $attachment) {
+                delete_attachment_file($attachmentToDeleteAfterSave);
+            }
 
             header('Location: index.php?success=Notice saved');
             exit;
@@ -235,6 +262,8 @@ try {
                 throw new RuntimeException('You can only delete notices that you created.');
             }
 
+            $attachmentToDelete = normalize_attachment_record($target['attachment'] ?? null);
+
             mutate_notices(static function (array $notices) use ($noticeId, $user): array {
                 foreach ($notices as $notice) {
                     if (($notice['id'] ?? '') === $noticeId && !can_edit_notice($user, $notice)) {
@@ -248,11 +277,16 @@ try {
                 ));
             });
 
+            delete_attachment_file($attachmentToDelete);
+
             header('Location: index.php?success=Notice deleted');
             exit;
         }
     }
 } catch (RuntimeException $exception) {
+    if ($uploadedAttachmentForCleanup !== null) {
+        delete_attachment_file($uploadedAttachmentForCleanup);
+    }
     $error = $exception->getMessage();
 }
 
@@ -283,7 +317,7 @@ sort_notices($visibleNotices);
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Admin Dashboard | NU LIPA SACE</title>
-  <link rel="stylesheet" href="../styles.css?v=20260602-admin9">
+  <link rel="stylesheet" href="../styles.css?v=20260602-admin11">
 </head>
 <body class="admin-body">
   <main class="admin-shell">
@@ -319,7 +353,7 @@ sort_notices($visibleNotices);
       <article class="admin-editor glass-panel">
         <p class="eyebrow"><?= $editing ? 'Edit Notice' : 'Create Notice' ?></p>
         <h2><?= $editing ? 'Update official bulletin content' : 'Publish a new official bulletin notice' ?></h2>
-        <form method="post" class="admin-form-stack">
+        <form method="post" class="admin-form-stack" enctype="multipart/form-data">
           <input type="hidden" name="csrf_token" value="<?= e(csrf_token()) ?>">
           <input type="hidden" name="action" value="save_notice">
           <input type="hidden" name="notice_id" value="<?= e((string) $formNotice['id']) ?>">
@@ -386,6 +420,22 @@ sort_notices($visibleNotices);
           </label>
 
           <label class="admin-field">
+            <span>Attachment</span>
+            <input type="file" name="attachment" accept=".pdf,image/png,image/jpeg,image/gif,image/webp">
+            <small class="admin-field-help">Optional. Attach only one file per notice: one PDF or one image, up to 10 MB.</small>
+          </label>
+
+          <?php if (!empty($formNotice['attachment'])): ?>
+            <div class="admin-attachment-box">
+              <p class="admin-notice-meta">Current attachment: <a class="secondary-link secondary-link-inline" href="../<?= e((string) $formNotice['attachment']['path']) ?>" target="_blank" rel="noopener"><?= e((string) $formNotice['attachment']['name']) ?></a></p>
+              <label class="admin-check">
+                <input type="checkbox" name="remove_attachment" value="1">
+                <span>Remove the current attachment when saving this notice</span>
+              </label>
+            </div>
+          <?php endif; ?>
+
+          <label class="admin-field">
             <span>Tags</span>
             <input type="text" name="tag" value="<?= e(implode(', ', $formNotice['tags'] ?? [])) ?>" placeholder="exam, faculty, students" required>
             <small class="admin-field-help">Separate tags with commas. Example: <code>examination, faculty, students</code></small>
@@ -427,6 +477,9 @@ sort_notices($visibleNotices);
                 <?php endforeach; ?>
               </div>
               <p class="admin-notice-body"><?= nl2br(e((string) $notice['text'])) ?></p>
+              <?php if (!empty($notice['attachment'])): ?>
+                <p class="admin-notice-meta">Attachment: <a class="secondary-link secondary-link-inline" href="../<?= e((string) $notice['attachment']['path']) ?>" target="_blank" rel="noopener"><?= e((string) $notice['attachment']['name']) ?></a></p>
+              <?php endif; ?>
               <div class="admin-actions">
                 <a class="secondary-link" href="index.php?edit=<?= urlencode((string) $notice['id']) ?>">Edit</a>
                 <form method="post" class="admin-inline-form" onsubmit="return confirm('Delete this notice?');">

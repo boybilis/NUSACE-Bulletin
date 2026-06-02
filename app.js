@@ -7,6 +7,11 @@ const tagFilterBar = document.getElementById("tagFilterBar");
 const activeTagChip = document.getElementById("activeTagChip");
 const clearTagFilter = document.getElementById("clearTagFilter");
 const scopeFilterBar = document.getElementById("scopeFilterBar");
+const attachmentModal = document.getElementById("attachmentModal");
+const attachmentModalBody = document.getElementById("attachmentModalBody");
+const attachmentModalName = document.getElementById("attachmentModalName");
+const attachmentModalOpen = document.getElementById("attachmentModalOpen");
+const attachmentModalClose = document.getElementById("attachmentModalClose");
 
 let deferredPrompt;
 let boards = [];
@@ -145,6 +150,45 @@ function createTagChip(tag) {
   return button;
 }
 
+function normalizeAttachmentUrl(path) {
+  return typeof path === "string" ? path.replace(/^\.?\//, "") : "";
+}
+
+function openAttachmentModal(attachment) {
+  if (!attachmentModal || !attachmentModalBody || !attachmentModalName || !attachmentModalOpen) {
+    return;
+  }
+
+  const source = normalizeAttachmentUrl(attachment?.path || "");
+  if (!source) {
+    return;
+  }
+
+  attachmentModalName.textContent = attachment.name || "Notice attachment";
+  attachmentModalOpen.href = source;
+
+  if (attachment.kind === "image") {
+    attachmentModalBody.innerHTML = `<img src="${escapeHtml(source)}" alt="${escapeHtml(attachment.name || "Notice attachment")}" class="attachment-preview-image">`;
+  } else if (attachment.kind === "pdf") {
+    attachmentModalBody.innerHTML = `<iframe src="${escapeHtml(source)}" class="attachment-preview-frame" title="${escapeHtml(attachment.name || "Notice attachment")}"></iframe>`;
+  } else {
+    attachmentModalBody.innerHTML = `<p>Preview is not available for this attachment.</p>`;
+  }
+
+  attachmentModal.hidden = false;
+  document.body.classList.add("modal-open");
+}
+
+function closeAttachmentModal() {
+  if (!attachmentModal || !attachmentModalBody) {
+    return;
+  }
+
+  attachmentModal.hidden = true;
+  attachmentModalBody.innerHTML = "";
+  document.body.classList.remove("modal-open");
+}
+
 function buildNoticeCard(notice, boardName = "") {
   const clone = noticeTemplate.content.cloneNode(true);
   clone.querySelector(".category-pill").textContent = notice.category;
@@ -158,6 +202,14 @@ function buildNoticeCard(notice, boardName = "") {
   (notice.tags || []).forEach((tag) => {
     tagContainer.appendChild(createTagChip(tag));
   });
+
+  const attachmentContainer = clone.querySelector(".notice-attachment");
+  const attachmentButton = clone.querySelector(".attachment-link");
+  if (notice.attachment && notice.attachment.path) {
+    attachmentContainer.hidden = false;
+    attachmentButton.textContent = `Attachment: ${notice.attachment.name || "View file"}`;
+    attachmentButton.addEventListener("click", () => openAttachmentModal(notice.attachment));
+  }
 
   return clone;
 }
@@ -269,7 +321,7 @@ function renderTaggedNotices(tag) {
 
 async function loadBoards() {
   try {
-    const response = await fetch("api/boards.php?v=20260602-admin9", {
+    const response = await fetch("api/boards.php?v=20260602-admin11", {
       cache: "no-store"
     });
 
@@ -316,6 +368,19 @@ installButton.addEventListener("click", async () => {
 clearTagFilter?.addEventListener("click", () => {
   activeTag = null;
   renderBoard("sace");
+});
+
+attachmentModalClose?.addEventListener("click", closeAttachmentModal);
+attachmentModal?.addEventListener("click", (event) => {
+  if (event.target instanceof HTMLElement && event.target.hasAttribute("data-close-attachment-modal")) {
+    closeAttachmentModal();
+  }
+});
+
+window.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") {
+    closeAttachmentModal();
+  }
 });
 
 scopeFilterBar?.querySelectorAll("[data-scope]").forEach((button) => {

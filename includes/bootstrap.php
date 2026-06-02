@@ -6,6 +6,8 @@ session_start();
 
 const APP_ROOT = __DIR__ . '/..';
 const DATA_ROOT = APP_ROOT . '/data';
+const ATTACHMENT_ROOT = APP_ROOT . '/uploads/attachments';
+const MAX_ATTACHMENT_BYTES = 10485760;
 
 function board_catalog(): array
 {
@@ -97,6 +99,141 @@ function notices_path(): string
 function users_path(): string
 {
     return DATA_ROOT . '/users.json';
+}
+
+function attachment_public_path(string $filename): string
+{
+    return 'uploads/attachments/' . ltrim(str_replace('\\', '/', $filename), '/');
+}
+
+function attachment_allowed_types(): array
+{
+    return [
+        'application/pdf' => ['extension' => 'pdf', 'kind' => 'pdf'],
+        'image/jpeg' => ['extension' => 'jpg', 'kind' => 'image'],
+        'image/png' => ['extension' => 'png', 'kind' => 'image'],
+        'image/gif' => ['extension' => 'gif', 'kind' => 'image'],
+        'image/webp' => ['extension' => 'webp', 'kind' => 'image'],
+    ];
+}
+
+function ensure_attachment_root(): void
+{
+    if (is_dir(ATTACHMENT_ROOT)) {
+        return;
+    }
+
+    if (!mkdir(ATTACHMENT_ROOT, 0775, true) && !is_dir(ATTACHMENT_ROOT)) {
+        throw new RuntimeException('Unable to create the attachment storage directory.');
+    }
+}
+
+function sanitize_attachment_name(string $name): string
+{
+    $baseName = trim(basename($name));
+    if ($baseName === '') {
+        return 'attachment';
+    }
+
+    $sanitized = preg_replace('/[^A-Za-z0-9._ -]/', '', $baseName);
+    $sanitized = preg_replace('/\s+/', ' ', (string) $sanitized);
+
+    return $sanitized !== '' ? $sanitized : 'attachment';
+}
+
+function normalize_attachment_record(mixed $attachment): ?array
+{
+    if (!is_array($attachment) || empty($attachment['path'])) {
+        return null;
+    }
+
+    return [
+        'path' => str_replace('\\', '/', (string) $attachment['path']),
+        'name' => sanitize_attachment_name((string) ($attachment['name'] ?? 'attachment')),
+        'mime' => (string) ($attachment['mime'] ?? ''),
+        'kind' => (string) ($attachment['kind'] ?? ''),
+        'size' => (int) ($attachment['size'] ?? 0),
+    ];
+}
+
+function store_uploaded_attachment(array $file): array
+{
+    $errorCode = (int) ($file['error'] ?? UPLOAD_ERR_NO_FILE);
+    if ($errorCode === UPLOAD_ERR_NO_FILE) {
+        throw new RuntimeException('No attachment was uploaded.');
+    }
+
+    if ($errorCode !== UPLOAD_ERR_OK) {
+        throw new RuntimeException('The attachment upload failed. Please try again.');
+    }
+
+    $size = (int) ($file['size'] ?? 0);
+    if ($size <= 0) {
+        throw new RuntimeException('The uploaded attachment is empty.');
+    }
+
+    if ($size > MAX_ATTACHMENT_BYTES) {
+        throw new RuntimeException('Attachments must be 10 MB or smaller.');
+    }
+
+    $tmpName = (string) ($file['tmp_name'] ?? '');
+    if ($tmpName === '' || !is_uploaded_file($tmpName)) {
+        throw new RuntimeException('Invalid uploaded attachment.');
+    }
+
+    $finfo = finfo_open(FILEINFO_MIME_TYPE);
+    $mime = $finfo ? (string) finfo_file($finfo, $tmpName) : '';
+    if ($finfo) {
+        finfo_close($finfo);
+    }
+
+    $allowed = attachment_allowed_types();
+    if (!isset($allowed[$mime])) {
+        throw new RuntimeException('Only one PDF or one image file may be attached to a notice.');
+    }
+
+    ensure_attachment_root();
+
+    $config = $allowed[$mime];
+    $storedName = gmdate('YmdHis') . '-' . bin2hex(random_bytes(6)) . '.' . $config['extension'];
+    $targetPath = ATTACHMENT_ROOT . '/' . $storedName;
+
+    if (!move_uploaded_file($tmpName, $targetPath)) {
+        throw new RuntimeException('Unable to save the uploaded attachment.');
+    }
+
+    return [
+        'path' => attachment_public_path($storedName),
+        'name' => sanitize_attachment_name((string) ($file['name'] ?? 'attachment')),
+        'mime' => $mime,
+        'kind' => $config['kind'],
+        'size' => $size,
+    ];
+}
+
+function delete_attachment_file(?array $attachment): void
+{
+    $record = normalize_attachment_record($attachment);
+    if ($record === null) {
+        return;
+    }
+
+    $relativePath = ltrim((string) $record['path'], '/');
+    $absolutePath = APP_ROOT . '/' . str_replace('/', DIRECTORY_SEPARATOR, $relativePath);
+    $resolvedRoot = realpath(ATTACHMENT_ROOT);
+    $resolvedFile = realpath($absolutePath);
+
+    if ($resolvedRoot === false || $resolvedFile === false) {
+        return;
+    }
+
+    if (strpos($resolvedFile, $resolvedRoot) !== 0) {
+        return;
+    }
+
+    if (is_file($resolvedFile)) {
+        unlink($resolvedFile);
+    }
 }
 
 function read_json_file(string $path): array
@@ -221,6 +358,7 @@ function normalize_notice_record(array $notice): array
         $rawTags
     ))));
     $notice['tag'] = implode(', ', $notice['tags']);
+    $notice['attachment'] = normalize_attachment_record($notice['attachment'] ?? null);
 
     return $notice;
 }
@@ -510,6 +648,7 @@ function group_boards_for_public(): array
             'updated_at' => (string) ($notice['updated_at'] ?? ''),
             'visible_from' => (string) ($notice['visible_from'] ?? ''),
             'visible_until' => (string) ($notice['visible_until'] ?? ''),
+            'attachment' => $notice['attachment'],
         ];
     }
 
@@ -547,6 +686,7 @@ function priority_notices_for_public(): array
                 'tags' => $notice['tags'],
                 'pinned' => (bool) ($notice['pinned'] ?? false),
                 'updated_at' => (string) ($notice['updated_at'] ?? ''),
+                'attachment' => $notice['attachment'],
             ];
         },
         $priority

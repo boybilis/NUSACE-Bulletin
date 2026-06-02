@@ -33,6 +33,10 @@ body {
     linear-gradient(180deg, #fffdf6 0%, #edf4fb 100%);
 }
 
+body.modal-open {
+  overflow: hidden;
+}
+
 body.admin-body {
   background:
     radial-gradient(circle at top left, rgba(242, 194, 77, 0.18), transparent 28%),
@@ -384,6 +388,26 @@ main {
   align-items: center;
 }
 
+.notice-attachment {
+  margin-top: 14px;
+}
+
+.attachment-link,
+.secondary-link-inline {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--navy);
+  font: inherit;
+  font-weight: 700;
+  text-decoration: underline;
+  box-shadow: none;
+}
+
+.attachment-link {
+  cursor: pointer;
+}
+
 .scope-filter-bar {
   display: flex;
   gap: 12px;
@@ -592,6 +616,15 @@ main {
   font-size: 0.86rem;
 }
 
+.admin-attachment-box {
+  display: grid;
+  gap: 10px;
+  padding: 14px 16px;
+  border-radius: 18px;
+  background: rgba(0, 58, 112, 0.04);
+  border: 1px solid rgba(0, 58, 112, 0.08);
+}
+
 .admin-actions {
   display: flex;
   gap: 12px;
@@ -690,6 +723,90 @@ main {
   margin: 0 0 8px;
 }
 
+.attachment-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+
+.attachment-modal[hidden] {
+  display: none;
+}
+
+.attachment-modal-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(1, 20, 38, 0.62);
+}
+
+.attachment-modal-dialog {
+  position: relative;
+  z-index: 1;
+  width: min(100%, 980px);
+  max-height: min(90vh, 860px);
+  display: grid;
+  gap: 16px;
+  padding: 24px;
+  overflow: hidden;
+}
+
+.attachment-modal-head,
+.attachment-modal-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.attachment-modal-head h2,
+.attachment-modal-name {
+  margin: 0;
+}
+
+.attachment-modal-close {
+  width: 42px;
+  height: 42px;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(0, 58, 112, 0.08);
+  color: var(--navy);
+  font-size: 1.5rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.attachment-modal-name {
+  color: rgba(16, 35, 59, 0.76);
+}
+
+.attachment-modal-body {
+  min-height: 280px;
+  max-height: min(68vh, 680px);
+  overflow: auto;
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(0, 58, 112, 0.08);
+}
+
+.attachment-preview-image,
+.attachment-preview-frame {
+  display: block;
+  width: 100%;
+  border: 0;
+}
+
+.attachment-preview-image {
+  height: auto;
+  object-fit: contain;
+}
+
+.attachment-preview-frame {
+  min-height: min(68vh, 680px);
+}
+
 @keyframes rise-in {
   from {
     opacity: 0;
@@ -765,5 +882,14 @@ main {
 
   .admin-grid {
     grid-template-columns: 1fr;
+  }
+
+  .attachment-modal {
+    padding: 16px;
+  }
+
+  .attachment-modal-dialog {
+    width: 100%;
+    padding: 18px;
   }
 }
