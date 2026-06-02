@@ -800,7 +800,7 @@ function priority_notices_for_public(?string $clientId = null): array
     sort_notices($priority);
 
     return array_map(
-        static function (array $notice) use ($catalog): array {
+        static function (array $notice) use ($catalog, $clientId): array {
             $boardId = (string) ($notice['board_id'] ?? '');
             return [
                 'id' => $notice['id'],
