@@ -300,6 +300,12 @@ main {
   font-size: 1.25rem;
 }
 
+.notice-divider {
+  margin: 10px 0 12px;
+  border: 0;
+  border-top: 1px solid rgba(16, 35, 59, 0.12);
+}
+
 .board-tabs {
   flex-wrap: wrap;
 }
@@ -569,6 +575,13 @@ main {
 .hero-stats div,
 .hero-stats p {
   color: rgba(16, 35, 59, 0.9);
+}
+
+.highlight-card .notice-date {
+  margin-top: 12px;
+  color: rgba(16, 35, 59, 0.56);
+  font-size: 0.82rem;
+  font-weight: 500;
 }
 
 .highlight-card p {

@@ -178,6 +178,7 @@ function renderHighlights() {
           ${isNewNotice(item) ? '<span class="notice-new-indicator" aria-label="New notice"></span>' : ""}
           <span class="eyebrow">${escapeHtml(item.board_name || item.board || "")}</span>
           <h3>${escapeHtml(item.title)}</h3>
+          <hr class="notice-divider">
           <p>${escapeHtml(item.text)}</p>
           ${item.attachment && item.attachment.path ? `<div class="notice-attachment"><button type="button" class="attachment-link" data-attachment='${escapeHtml(JSON.stringify(item.attachment))}'>Attachment: ${escapeHtml(item.attachment.name || "View file")}</button></div>` : ""}
           <p class="notice-date">${item.pinned ? "Pinned" : `Visible ${escapeHtml(formatDate(item.visible_from || item.date))}`}</p>
@@ -458,7 +459,7 @@ function renderTaggedNotices(tag) {
 
 async function loadBoards() {
   try {
-    const response = await fetch(`api/boards.php?v=20260602-admin18&client_id=${encodeURIComponent(clientId)}`, {
+    const response = await fetch(`api/boards.php?v=20260602-admin19&client_id=${encodeURIComponent(clientId)}`, {
       cache: "no-store"
     });
 
@@ -534,7 +535,7 @@ scopeFilterBar?.querySelectorAll("[data-scope]").forEach((button) => {
 
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
-    navigator.serviceWorker.register("service-worker.js?v=20260602-admin18", {
+    navigator.serviceWorker.register("service-worker.js?v=20260602-admin19", {
       updateViaCache: "none"
     }).then((registration) => {
       if (registration.waiting) {
