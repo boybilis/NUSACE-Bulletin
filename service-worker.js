@@ -1,4 +1,4 @@
-const CACHE_NAME = "nusace-bulletin-v9";
+const CACHE_NAME = "nusace-bulletin-v10";
 const APP_ASSETS = [
   "./",
   "./index.html",
@@ -6,6 +6,8 @@ const APP_ASSETS = [
   "./assets/img/NU lipa.png",
   "./assets/img/icon-192.png",
   "./assets/img/icon-512.png",
+  "./assets/img/icon-192-maskable.png",
+  "./assets/img/icon-512-maskable.png",
   "./assets/img/apple-touch-icon.png",
   "./assets/img/favicon-32.png"
 ];

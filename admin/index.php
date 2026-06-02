@@ -119,7 +119,7 @@ try {
                 return $notices;
             });
 
-            header('Location: /NUSACE-Bulletin/admin/index.php?success=Notice saved');
+            header('Location: index.php?success=Notice saved');
             exit;
         }
 
@@ -148,7 +148,7 @@ try {
                 ));
             });
 
-            header('Location: /NUSACE-Bulletin/admin/index.php?success=Notice deleted');
+            header('Location: index.php?success=Notice deleted');
             exit;
         }
     }
@@ -182,7 +182,7 @@ sort_notices($visibleNotices);
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Admin Dashboard | NU LIPA SACE</title>
-  <link rel="stylesheet" href="/NUSACE-Bulletin/styles.css?v=20260602-admin8">
+  <link rel="stylesheet" href="../styles.css?v=20260602-admin9">
 </head>
 <body class="admin-body">
   <main class="admin-shell">
@@ -197,8 +197,8 @@ sort_notices($visibleNotices);
         </p>
       </div>
       <div class="admin-actions">
-        <a class="secondary-link" href="/NUSACE-Bulletin/index.html">View Public Board</a>
-        <a class="secondary-link" href="/NUSACE-Bulletin/admin/logout.php">Sign Out</a>
+        <a class="secondary-link" href="../index.html">View Public Board</a>
+        <a class="secondary-link" href="logout.php">Sign Out</a>
       </div>
     </section>
 
@@ -294,7 +294,7 @@ sort_notices($visibleNotices);
           <div class="admin-actions">
             <button type="submit" class="install-btn admin-submit"><?= $editing ? 'Update Notice' : 'Publish Notice' ?></button>
             <?php if ($editing): ?>
-              <a class="secondary-link" href="/NUSACE-Bulletin/admin/index.php">Cancel</a>
+              <a class="secondary-link" href="index.php">Cancel</a>
             <?php endif; ?>
           </div>
         </form>
@@ -323,7 +323,7 @@ sort_notices($visibleNotices);
               </div>
               <p class="admin-notice-body"><?= nl2br(e((string) $notice['text'])) ?></p>
               <div class="admin-actions">
-                <a class="secondary-link" href="/NUSACE-Bulletin/admin/index.php?edit=<?= urlencode((string) $notice['id']) ?>">Edit</a>
+                <a class="secondary-link" href="index.php?edit=<?= urlencode((string) $notice['id']) ?>">Edit</a>
                 <form method="post" class="admin-inline-form" onsubmit="return confirm('Delete this notice?');">
                   <input type="hidden" name="csrf_token" value="<?= e(csrf_token()) ?>">
                   <input type="hidden" name="action" value="delete_notice">

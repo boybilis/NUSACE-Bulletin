@@ -296,7 +296,7 @@ function logout_user(): void
 function require_login(): void
 {
     if (!is_logged_in()) {
-        header('Location: /NUSACE-Bulletin/admin/login.php');
+        header('Location: login.php');
         exit;
     }
 }

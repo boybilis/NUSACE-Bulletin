@@ -5,7 +5,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/../includes/bootstrap.php';
 
 if (is_logged_in()) {
-    header('Location: /NUSACE-Bulletin/admin/index.php');
+    header('Location: index.php');
     exit;
 }
 
@@ -22,7 +22,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         if (password_verify($password, $user['password_hash'])) {
             login_user($user);
-            header('Location: /NUSACE-Bulletin/admin/index.php');
+            header('Location: index.php');
             exit;
         }
     }
@@ -36,7 +36,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Admin Login | NU LIPA SACE</title>
-  <link rel="stylesheet" href="/NUSACE-Bulletin/styles.css?v=20260602-admin8">
+  <link rel="stylesheet" href="../styles.css?v=20260602-admin9">
 </head>
 <body class="admin-body">
   <main class="admin-shell admin-login-shell">

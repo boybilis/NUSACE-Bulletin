@@ -6,5 +6,5 @@ require_once __DIR__ . '/../includes/bootstrap.php';
 
 logout_user();
 
-header('Location: /NUSACE-Bulletin/admin/login.php');
+header('Location: login.php');
 exit;
