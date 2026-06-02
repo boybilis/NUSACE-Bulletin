@@ -273,6 +273,7 @@ main {
 }
 
 .highlight-card {
+  position: relative;
   padding: 18px;
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.78), rgba(255, 250, 241, 0.7));
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.9), rgba(242, 194, 77, 0.14));
@@ -390,6 +391,10 @@ main {
 
 .notice-attachment {
   margin-top: 14px;
+}
+
+.highlight-card .notice-attachment {
+  margin-top: 12px;
 }
 
 .attachment-link,

@@ -124,14 +124,26 @@ function renderHighlights() {
     .map(
       (item) => `
         <article class="highlight-card">
+          ${isNewNotice(item) ? '<span class="notice-new-indicator" aria-label="New notice"></span>' : ""}
           <span class="eyebrow">${escapeHtml(item.board_name || item.board || "")}</span>
           <h3>${escapeHtml(item.title)}</h3>
           <p>${escapeHtml(item.text)}</p>
+          ${item.attachment && item.attachment.path ? `<div class="notice-attachment"><button type="button" class="attachment-link" data-attachment='${escapeHtml(JSON.stringify(item.attachment))}'>Attachment: ${escapeHtml(item.attachment.name || "View file")}</button></div>` : ""}
           <p class="notice-date">${item.pinned ? "Pinned" : `Visible ${escapeHtml(formatDate(item.visible_from || item.date))}`}</p>
         </article>
       `
     )
     .join("");
+
+  highlightStrip.querySelectorAll("[data-attachment]").forEach((button) => {
+    button.addEventListener("click", () => {
+      try {
+        const raw = button.getAttribute("data-attachment") || "";
+        openAttachmentModal(JSON.parse(raw));
+      } catch (error) {
+      }
+    });
+  });
 }
 
 function updateScopeButtons() {
@@ -342,7 +354,7 @@ function renderTaggedNotices(tag) {
 
 async function loadBoards() {
   try {
-    const response = await fetch("api/boards.php?v=20260602-admin13", {
+    const response = await fetch("api/boards.php?v=20260602-admin14", {
       cache: "no-store"
     });
 
@@ -418,7 +430,7 @@ scopeFilterBar?.querySelectorAll("[data-scope]").forEach((button) => {
 
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
-    navigator.serviceWorker.register("service-worker.js?v=20260602-admin13", {
+    navigator.serviceWorker.register("service-worker.js?v=20260602-admin14", {
       updateViaCache: "none"
     }).then((registration) => {
       if (registration.waiting) {
