@@ -1,0 +1,343 @@
+[
+    {
+        "id": "notice-sace-1",
+        "board_id": "sace",
+        "category": "Announcement",
+        "audience": "Faculty and Students",
+        "title": "Release of the NULIPA-SACE general assembly schedule",
+        "date": "2026-06-03",
+        "text": "The official schedule for the NULIPA-SACE general assembly is now available. Faculty members, student leaders, and students are advised to review the complete program, attendance instructions, and venue assignments.",
+        "tag": "general assembly, official notice",
+        "tags": [
+            "general assembly",
+            "official notice"
+        ],
+        "pinned": false,
+        "created_at": "",
+        "updated_at": ""
+    },
+    {
+        "id": "notice-sace-2",
+        "board_id": "sace",
+        "category": "Deadline",
+        "audience": "Faculty, Program Chairs, and Student Officers",
+        "title": "Deadline for submission of official notices to the NULIPA-SACE board",
+        "date": "2026-06-05",
+        "text": "All units submitting school-wide announcements are reminded to forward approved bulletin materials on or before Friday to ensure timely posting on the NULIPA-SACE academic bulletin board.",
+        "tag": "submission deadline, bulletin notice",
+        "tags": [
+            "submission deadline",
+            "bulletin notice"
+        ],
+        "pinned": false,
+        "created_at": "",
+        "updated_at": ""
+    },
+    {
+        "id": "notice-sace-3",
+        "board_id": "sace",
+        "category": "Announcement",
+        "audience": "All SACE Programs",
+        "title": "Call for participation in the inter-program academic innovation challenge",
+        "date": "2026-06-10",
+        "text": "Students from Architecture, BS Computer Science, BS Information Technology, Multimedia Arts, Computer Engineering, and Engineering are invited to participate in the inter-program academic innovation challenge. Submission guidelines and timelines are available through the bulletin board.",
+        "tag": "competition, student participation",
+        "tags": [
+            "competition",
+            "student participation"
+        ],
+        "pinned": false,
+        "created_at": "",
+        "updated_at": ""
+    },
+    {
+        "id": "notice-architecture-1",
+        "board_id": "architecture",
+        "category": "Exhibit",
+        "audience": "Architecture Faculty and Students",
+        "title": "Display schedule for third-year studio output",
+        "date": "2026-06-04",
+        "text": "The School of Architecture has posted the official display schedule for third-year studio output. Faculty and students may view the exhibited models and presentation boards during the announced gallery hours.",
+        "tag": "studio output, exhibit",
+        "tags": [
+            "studio output",
+            "exhibit"
+        ],
+        "pinned": false,
+        "created_at": "",
+        "updated_at": ""
+    },
+    {
+        "id": "notice-architecture-2",
+        "board_id": "architecture",
+        "category": "Class Advisory",
+        "audience": "Architecture Students and Faculty",
+        "title": "Reassignment of rooms for midterm jury sessions",
+        "date": "2026-06-06",
+        "text": "Selected Architecture design sections have updated room assignments for midterm jury sessions. Students and faculty panelists are advised to review the final venue list before the scheduled presentation period.",
+        "tag": "jury schedule, room assignment",
+        "tags": [
+            "jury schedule",
+            "room assignment"
+        ],
+        "pinned": false,
+        "created_at": "",
+        "updated_at": ""
+    },
+    {
+        "id": "notice-architecture-3",
+        "board_id": "architecture",
+        "category": "Workshop",
+        "audience": "Architecture Faculty and Students",
+        "title": "Registration for the parametric facade workshop",
+        "date": "2026-06-12",
+        "text": "Registration is now open for the parametric facade workshop. The session will cover Rhino and Grasshopper workflows for environmental analysis and academic design presentation requirements.",
+        "tag": "workshop, architecture",
+        "tags": [
+            "workshop",
+            "architecture"
+        ],
+        "pinned": false,
+        "created_at": "",
+        "updated_at": ""
+    },
+    {
+        "id": "notice-cs-1",
+        "board_id": "computer-science",
+        "category": "Announcement",
+        "audience": "BS Computer Science Students",
+        "title": "Academic coding activity for BS Computer Science students",
+        "date": "2026-06-08",
+        "text": "BS Computer Science students are advised of the scheduled academic coding activity this Saturday. The program includes mentor checkpoints, code review sessions, and final presentations of student outputs.",
+        "tag": "coding activity, bscs",
+        "tags": [
+            "coding activity",
+            "bscs"
+        ],
+        "pinned": false,
+        "created_at": "",
+        "updated_at": ""
+    },
+    {
+        "id": "notice-cs-2",
+        "board_id": "computer-science",
+        "category": "Laboratory",
+        "audience": "BS Computer Science Faculty and Students",
+        "title": "Software laboratory server maintenance advisory",
+        "date": "2026-06-09",
+        "text": "The software laboratory development server will undergo maintenance from 7:00 PM to 10:00 PM. Faculty and students are advised to save files in advance and avoid system deployment during the maintenance period.",
+        "tag": "server maintenance, laboratory advisory",
+        "tags": [
+            "server maintenance",
+            "laboratory advisory"
+        ],
+        "pinned": false,
+        "created_at": "",
+        "updated_at": ""
+    },
+    {
+        "id": "notice-cs-3",
+        "board_id": "computer-science",
+        "category": "Research",
+        "audience": "BS Computer Science Seniors",
+        "title": "Publication of capstone research consultation schedules",
+        "date": "2026-06-11",
+        "text": "Faculty consultation schedules for machine learning, data science, systems, and software engineering capstone groups have been posted. Students are advised to review available time slots and coordinate accordingly.",
+        "tag": "capstone, research consultation",
+        "tags": [
+            "capstone",
+            "research consultation"
+        ],
+        "pinned": false,
+        "created_at": "",
+        "updated_at": ""
+    },
+    {
+        "id": "notice-eng-1",
+        "board_id": "engineering",
+        "category": "Safety",
+        "audience": "Engineering Faculty and Students",
+        "title": "Laboratory and workshop PPE compliance advisory",
+        "date": "2026-06-07",
+        "text": "All Engineering laboratories and workshop spaces will conduct personal protective equipment compliance checks before afternoon sessions. Faculty and students are reminded to observe safety requirements at all times.",
+        "tag": "safety advisory, laboratory",
+        "tags": [
+            "safety advisory",
+            "laboratory"
+        ],
+        "pinned": false,
+        "created_at": "",
+        "updated_at": ""
+    },
+    {
+        "id": "notice-eng-2",
+        "board_id": "engineering",
+        "category": "Capstone",
+        "audience": "Engineering Faculty and Students",
+        "title": "Schedule of Engineering capstone demonstration trials",
+        "date": "2026-06-13",
+        "text": "The schedule for Engineering capstone demonstration trials has been posted. Faculty and students may attend the presentation of project progress, subsystem updates, and testing results during the designated demo window.",
+        "tag": "capstone, engineering demo",
+        "tags": [
+            "capstone",
+            "engineering demo"
+        ],
+        "pinned": false,
+        "created_at": "",
+        "updated_at": ""
+    },
+    {
+        "id": "notice-eng-3",
+        "board_id": "engineering",
+        "category": "Facilities",
+        "audience": "Engineering Faculty and Students",
+        "title": "Additional booking schedule for the materials testing laboratory",
+        "date": "2026-06-14",
+        "text": "Additional morning booking schedules are now available for concrete, metals, fabrication, and stress analysis sessions in the materials testing laboratory.",
+        "tag": "laboratory booking, facilities",
+        "tags": [
+            "laboratory booking",
+            "facilities"
+        ],
+        "pinned": false,
+        "created_at": "",
+        "updated_at": ""
+    },
+    {
+        "id": "notice-mma-1",
+        "board_id": "mma",
+        "category": "Announcement",
+        "audience": "Multimedia Arts Faculty and Students",
+        "title": "Announcement of digital portfolio review week",
+        "date": "2026-06-09",
+        "text": "Multimedia Arts students may now sign up for faculty review slots covering branding, motion graphics, illustration, and interactive media portfolio requirements.",
+        "tag": "portfolio review, multimedia arts",
+        "tags": [
+            "portfolio review",
+            "multimedia arts"
+        ],
+        "pinned": false,
+        "created_at": "",
+        "updated_at": ""
+    },
+    {
+        "id": "notice-mma-2",
+        "board_id": "mma",
+        "category": "Workshop",
+        "audience": "Multimedia Arts Faculty and Students",
+        "title": "Schedule for the motion graphics academic workshop",
+        "date": "2026-06-11",
+        "text": "The workshop schedule for motion graphics, animation timing, title design, and short-form visual storytelling has been posted for Multimedia Arts faculty and students.",
+        "tag": "workshop, motion graphics",
+        "tags": [
+            "workshop",
+            "motion graphics"
+        ],
+        "pinned": false,
+        "created_at": "",
+        "updated_at": ""
+    },
+    {
+        "id": "notice-mma-3",
+        "board_id": "mma",
+        "category": "Deadline",
+        "audience": "Multimedia Arts Seniors",
+        "title": "Deadline for submission of exhibition requirements",
+        "date": "2026-06-14",
+        "text": "Graduating Multimedia Arts students are reminded to submit final display boards, reels, captions, and artist statements before the official exhibit curation deadline.",
+        "tag": "submission deadline, exhibition",
+        "tags": [
+            "submission deadline",
+            "exhibition"
+        ],
+        "pinned": false,
+        "created_at": "",
+        "updated_at": ""
+    },
+    {
+        "id": "notice-cpe-1",
+        "board_id": "cpe",
+        "category": "Announcement",
+        "audience": "Computer Engineering Faculty and Students",
+        "title": "Schedule of embedded systems project demonstrations",
+        "date": "2026-06-10",
+        "text": "Computer Engineering student teams will present embedded systems projects and prototype outputs for faculty evaluation. Demonstrations include hardware performance, documentation, and systems integration review.",
+        "tag": "embedded systems, project demo",
+        "tags": [
+            "embedded systems",
+            "project demo"
+        ],
+        "pinned": false,
+        "created_at": "",
+        "updated_at": ""
+    },
+    {
+        "id": "notice-cpe-2",
+        "board_id": "cpe",
+        "category": "Laboratory",
+        "audience": "Computer Engineering Faculty and Students",
+        "title": "Updated release schedule for hardware laboratory components",
+        "date": "2026-06-12",
+        "text": "The updated borrowing and return schedule for boards, sensors, kits, and testing equipment used in Computer Engineering laboratory classes is now available for faculty and students.",
+        "tag": "laboratory advisory, hardware components",
+        "tags": [
+            "laboratory advisory",
+            "hardware components"
+        ],
+        "pinned": false,
+        "created_at": "",
+        "updated_at": ""
+    },
+    {
+        "id": "notice-cpe-3",
+        "board_id": "cpe",
+        "category": "Capstone",
+        "audience": "Computer Engineering Seniors",
+        "title": "Opening of capstone integration consultation schedules",
+        "date": "2026-06-15",
+        "text": "Computer Engineering senior groups may now reserve consultation schedules for hardware-software integration, testing procedures, and final technical presentation review.",
+        "tag": "capstone, consultation schedule",
+        "tags": [
+            "capstone",
+            "consultation schedule"
+        ],
+        "pinned": false,
+        "created_at": "",
+        "updated_at": ""
+    },
+    {
+        "id": "notice_6a1e3c228a34f9.14573198",
+        "board_id": "information-technology",
+        "category": "Examination Schedule",
+        "audience": "Faculty and Students",
+        "title": "Final examination schedule for Third Term AY 2025-2026",
+        "date": "2026-06-02",
+        "text": "Final Examinations: June 1-6\nGrade Consultation: June 8-9\nDeadline for Grade Encoding: June 10",
+        "tag": "examination, faculty, students",
+        "tags": [
+            "examination",
+            "faculty",
+            "students"
+        ],
+        "pinned": true,
+        "created_at": "",
+        "updated_at": "2026-06-02T02:25:30+00:00"
+    },
+    {
+        "id": "notice_6a1e41b56020c8.55055714",
+        "board_id": "information-technology",
+        "category": "Examination Schedule",
+        "audience": "Faculty and Students",
+        "title": "Midterm examination schedule",
+        "date": "2026-06-02",
+        "text": "Midterm Examinations: August 24-28, 2026",
+        "tag": "examination, schedule",
+        "tags": [
+            "examination",
+            "schedule"
+        ],
+        "pinned": true,
+        "created_at": "2026-06-02T02:36:37+00:00",
+        "updated_at": "2026-06-02T02:36:37+00:00"
+    }
+]

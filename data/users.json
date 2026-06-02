@@ -1,0 +1,71 @@
+[
+    {
+        "username": "dean",
+        "name": "SACE Dean",
+        "role": "dean",
+        "board_ids": [
+            "sace",
+            "architecture",
+            "computer-science",
+            "information-technology",
+            "engineering",
+            "mma",
+            "cpe"
+        ],
+        "password_hash": "$2y$10$N4drRGJT7fJg34Lnfv7VEe1Ql5xlkIh2lY0.3VsYOcHNvhEOs8f/y"
+    },
+    {
+        "username": "chair.architecture",
+        "name": "Architecture Program Chair",
+        "role": "program_chair",
+        "board_ids": [
+            "architecture"
+        ],
+        "password_hash": "$2y$10$oChZuMBnkJhmuEXdRQyFW.DuRJzLDWUo5ywNLfI.sDaz1GgACUWHy"
+    },
+    {
+        "username": "chair.computer-science",
+        "name": "BS Computer Science Program Chair",
+        "role": "program_chair",
+        "board_ids": [
+            "computer-science"
+        ],
+        "password_hash": "$2y$10$oChZuMBnkJhmuEXdRQyFW.DuRJzLDWUo5ywNLfI.sDaz1GgACUWHy"
+    },
+    {
+        "username": "chair.information-technology",
+        "name": "BS Information Technology Program Chair",
+        "role": "program_chair",
+        "board_ids": [
+            "information-technology"
+        ],
+        "password_hash": "$2y$10$oChZuMBnkJhmuEXdRQyFW.DuRJzLDWUo5ywNLfI.sDaz1GgACUWHy"
+    },
+    {
+        "username": "chair.engineering",
+        "name": "Engineering Program Chair",
+        "role": "program_chair",
+        "board_ids": [
+            "engineering"
+        ],
+        "password_hash": "$2y$10$oChZuMBnkJhmuEXdRQyFW.DuRJzLDWUo5ywNLfI.sDaz1GgACUWHy"
+    },
+    {
+        "username": "chair.mma",
+        "name": "Multimedia Arts Program Chair",
+        "role": "program_chair",
+        "board_ids": [
+            "mma"
+        ],
+        "password_hash": "$2y$10$oChZuMBnkJhmuEXdRQyFW.DuRJzLDWUo5ywNLfI.sDaz1GgACUWHy"
+    },
+    {
+        "username": "chair.cpe",
+        "name": "Computer Engineering Program Chair",
+        "role": "program_chair",
+        "board_ids": [
+            "cpe"
+        ],
+        "password_hash": "$2y$10$oChZuMBnkJhmuEXdRQyFW.DuRJzLDWUo5ywNLfI.sDaz1GgACUWHy"
+    }
+]

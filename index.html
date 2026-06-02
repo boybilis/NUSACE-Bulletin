@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#003A70" />
+  <meta name="description" content="NULIPA-SACE academic digital bulletin board for faculty and students, with official announcements and notices across the School of Architecture, Computing, and Engineering." />
+  <link rel="manifest" href="manifest.json" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Fraunces:opsz,wght@9..144,600;9..144,700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css?v=20260602-admin6" />
+  <title>NU LIPA SACE Bulletin Board</title>
+</head>
+<body>
+  <div class="page-shell">
+    <header class="hero">
+      <nav class="topbar">
+        <div>
+          <div class="brand-lockup">
+            <img
+              src="assets/img/NU lipa.png"
+              alt="NU Lipa logo"
+              class="brand-logo"
+            />
+            <div class="brand-copy">
+              <span class="brand-name">NU LIPA</span>
+              <span class="brand-subtitle">School of Architecture, Computing and Engineering</span>
+            </div>
+          </div>
+          <p class="eyebrow">NU LIPA SACE Academic Bulletin</p>
+          <h1>Official academic bulletin boards for NU LIPA School of Architecture, Computing and Engineering.</h1>
+        </div>
+        <button class="install-btn" id="installButton" hidden>Install App</button>
+      </nav>
+
+      <div class="hero-grid">
+        <section class="hero-copy glass-panel">
+          <p class="lead">
+            Access official academic announcements, faculty advisories, student notices, schedules, and departmental updates across the NULIPA-SACE umbrella board and each academic unit.
+          </p>
+          <div class="hero-actions">
+            <a href="#boards" class="primary-link">Open Bulletin Boards</a>
+            <a href="#highlights" class="secondary-link">View Priority Notices</a>
+            <a href="admin/login.php" class="secondary-link">Admin Login</a>
+          </div>
+        </section>
+
+        <aside class="hero-stats glass-panel">
+          <div>
+            <span>7</span>
+            <p>Bulletin boards</p>
+          </div>
+          <div>
+            <span>6</span>
+            <p>Academic units</p>
+          </div>
+          <div>
+            <span>24/7</span>
+            <p>Faculty and student access</p>
+          </div>
+        </aside>
+      </div>
+    </header>
+
+    <main>
+      <section class="highlights" id="highlights">
+        <div class="section-heading">
+          <p class="eyebrow">Priority Notices</p>
+          <h2>Official announcements that faculty and students need to see first</h2>
+        </div>
+        <div class="highlight-strip" id="highlightStrip"></div>
+      </section>
+
+      <section class="board-section" id="boards">
+        <div class="section-heading">
+          <p class="eyebrow">Academic Boards</p>
+          <h2>Select a bulletin board under the NULIPA-SACE umbrella</h2>
+        </div>
+
+        <div class="scope-filter-bar" id="scopeFilterBar" aria-label="Notice scope filters">
+          <button type="button" class="scope-chip is-active" data-scope="all">All Active</button>
+          <button type="button" class="scope-chip" data-scope="weekly">This Week</button>
+          <button type="button" class="scope-chip" data-scope="monthly">This Month</button>
+        </div>
+        <div class="board-tabs" id="boardTabs" aria-label="Bulletin board categories"></div>
+        <div class="tag-filter-bar" id="tagFilterBar" hidden>
+          <span class="tag-filter-label">Filtered by tag:</span>
+          <button type="button" class="tag-chip is-active" id="activeTagChip"></button>
+          <button type="button" class="tag-filter-clear" id="clearTagFilter">Clear Filter</button>
+        </div>
+        <div class="board-panel" id="boardPanel"></div>
+      </section>
+    </main>
+  </div>
+
+  <template id="noticeTemplate">
+    <article class="notice-card glass-panel">
+      <div class="notice-meta">
+        <span class="pill category-pill"></span>
+        <span class="pill audience-pill"></span>
+      </div>
+      <h3></h3>
+      <p class="notice-date"></p>
+      <p class="notice-text"></p>
+      <footer>
+        <div class="notice-tags"></div>
+        <span class="notice-cta">Pin to top</span>
+      </footer>
+    </article>
+  </template>
+
+  <script src="app.js?v=20260602-admin6"></script>
+</body>
+</html>
