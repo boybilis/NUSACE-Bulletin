@@ -192,7 +192,7 @@ sort_notices($visibleNotices);
         <h1>Welcome, <?= e((string) $user['name']) ?></h1>
         <p class="admin-intro">
           <?= $user['role'] === 'dean'
-              ? 'Dean access: publish and manage official announcements and notices across all academic bulletin boards, including the NULIPA-SACE umbrella board.'
+              ? 'Dean access: publish and manage official announcements and notices across all academic bulletin boards, including the NULIPA-SACE School board.'
               : 'Program chair access: publish notices to your assigned academic board and manage only the notices you personally created.' ?>
         </p>
       </div>

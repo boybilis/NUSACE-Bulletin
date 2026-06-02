@@ -45,7 +45,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     </div>
     <section class="admin-login-card glass-panel">
       <p class="eyebrow">Bulletin Administrator Access</p>
-      <h1>NU LIPA SACE Bulletin Board</h1>
+      <h1>NU Lipa SACE Bulletin Board</h1>
       <p class="admin-intro">Authorized academic administrators may publish official announcements and notices for faculty and students. Program chairs manage their assigned board, while the Dean oversees all bulletin boards.</p>
 
       <?php if ($error !== ''): ?>
