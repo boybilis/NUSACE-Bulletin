@@ -21,7 +21,7 @@
 </head>
 <body>
   <div class="page-shell">
-    <header class="hero">
+    <header class="hero" id="homeHero">
       <nav class="topbar">
         <div>
           <div class="brand-lockup">
@@ -47,8 +47,8 @@
             Access official academic announcements, faculty advisories, student notices, schedules, and departmental updates across the NULIPA-SACE School boards and each academic unit.
           </p>
           <div class="hero-actions">
-            <a href="#boards" class="primary-link">Open Bulletin Boards</a>
-            <a href="#highlights" class="secondary-link">View Priority Notices</a>
+            <a href="#boards" class="primary-link" data-app-view="boards">Open Bulletin Boards</a>
+            <a href="#highlights" class="secondary-link" data-app-view="highlights">View Priority Notices</a>
             <a href="admin/login.php" class="secondary-link">Admin Login</a>
           </div>
         </section>
@@ -71,7 +71,7 @@
     </header>
 
     <main>
-      <section class="highlights" id="highlights">
+      <section class="highlights" id="highlights" data-app-section="highlights">
         <div class="section-heading">
           <p class="eyebrow">Priority Notices</p>
           <h2>Official announcements that faculty and students need to see first</h2>
@@ -79,7 +79,7 @@
         <div class="highlight-strip" id="highlightStrip"></div>
       </section>
 
-      <section class="board-section" id="boards">
+      <section class="board-section" id="boards" data-app-section="boards">
         <div class="section-heading">
           <p class="eyebrow">Academic Boards</p>
           <h2>Select a bulletin board under the NULIPA-SACE School</h2>
@@ -99,7 +99,7 @@
         <div class="board-panel" id="boardPanel"></div>
       </section>
 
-      <section class="feedback-section" id="feedback">
+      <section class="feedback-section" id="feedback" data-app-section="feedback">
         <div class="section-heading">
           <p class="eyebrow">Feedback</p>
           <h2>Share suggestions, concerns, appreciation, or complaints with a department or the NULIPA-SACE School</h2>
@@ -169,15 +169,15 @@
   </div>
 
   <nav class="app-bottom-nav" aria-label="Primary">
-    <a href="#boards" class="app-bottom-link" data-nav-section="boards">
+    <a href="#boards" class="app-bottom-link" data-nav-section="boards" data-app-view="boards">
       <span class="app-bottom-icon" aria-hidden="true">▦</span>
       <span class="app-bottom-label">Boards</span>
     </a>
-    <a href="#highlights" class="app-bottom-link" data-nav-section="highlights">
+    <a href="#highlights" class="app-bottom-link" data-nav-section="highlights" data-app-view="highlights">
       <span class="app-bottom-icon" aria-hidden="true">★</span>
       <span class="app-bottom-label">Priority</span>
     </a>
-    <a href="#feedback" class="app-bottom-link" data-nav-section="feedback">
+    <a href="#feedback" class="app-bottom-link" data-nav-section="feedback" data-app-view="feedback">
       <span class="app-bottom-icon" aria-hidden="true">✉</span>
       <span class="app-bottom-label">Feedbacks</span>
     </a>

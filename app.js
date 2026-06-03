@@ -25,6 +25,9 @@ const feedbackVerifyButton = document.getElementById("feedbackVerifyButton");
 const feedbackResetButton = document.getElementById("feedbackResetButton");
 const feedbackSuccess = document.getElementById("feedbackSuccess");
 const feedbackError = document.getElementById("feedbackError");
+const homeHero = document.getElementById("homeHero");
+const appSections = [...document.querySelectorAll("[data-app-section]")];
+const appViewLinks = [...document.querySelectorAll("[data-app-view]")];
 const appBottomLinks = [...document.querySelectorAll(".app-bottom-link[data-nav-section]")];
 const CLIENT_ID_KEY = "nusaceBulletinClientId";
 const API_VERSION = "20260602-admin20";
@@ -40,6 +43,8 @@ let hasReloadedForUpdate = false;
 let activeBoardId = "sace";
 let feedbackOtpExpiresAt = null;
 let feedbackOtpTimer = null;
+let currentAppView = "home";
+let previousScrollY = 0;
 const expandedNoticeCards = new Set();
 const clientId = getClientId();
 
@@ -668,37 +673,58 @@ function setActiveBottomNav(sectionId) {
 }
 
 function initializeBottomNav() {
-  if (appBottomLinks.length === 0) {
+  if (appViewLinks.length === 0) {
     return;
   }
 
-  const sections = ["highlights", "boards", "feedback"]
-    .map((id) => document.getElementById(id))
-    .filter(Boolean);
-
-  appBottomLinks.forEach((link) => {
-    link.addEventListener("click", () => {
-      if (link.dataset.navSection) {
-        setActiveBottomNav(link.dataset.navSection);
+  appViewLinks.forEach((link) => {
+    link.addEventListener("click", (event) => {
+      const targetView = link.dataset.appView;
+      if (!targetView) {
+        return;
       }
+
+      event.preventDefault();
+      showAppView(targetView);
     });
   });
+}
 
-  const observer = new IntersectionObserver((entries) => {
-    const visible = entries
-      .filter((entry) => entry.isIntersecting)
-      .sort((left, right) => right.intersectionRatio - left.intersectionRatio)[0];
+function showAppView(view) {
+  currentAppView = view;
 
-    if (visible?.target?.id) {
-      setActiveBottomNav(visible.target.id);
-    }
-  }, {
-    rootMargin: "-20% 0px -45% 0px",
-    threshold: [0.2, 0.4, 0.6]
+  const isHome = view === "home";
+  homeHero?.classList.toggle("app-view-hidden", !isHome);
+
+  appSections.forEach((section) => {
+    section.classList.toggle("app-view-hidden", isHome || section.id !== view);
   });
 
-  sections.forEach((section) => observer.observe(section));
-  setActiveBottomNav("boards");
+  if (isHome) {
+    setActiveBottomNav("");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    return;
+  }
+
+  setActiveBottomNav(view);
+  requestAnimationFrame(() => {
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  });
+}
+
+function initializeHomeScrollReturn() {
+  previousScrollY = window.scrollY;
+
+  window.addEventListener("scroll", () => {
+    const currentScrollY = window.scrollY;
+    const scrolledUp = currentScrollY < previousScrollY - 24;
+
+    if (currentAppView !== "home" && scrolledUp) {
+      showAppView("home");
+    }
+
+    previousScrollY = currentScrollY;
+  }, { passive: true });
 }
 
 function buildNoticeCard(notice, boardName = "") {
@@ -1072,4 +1098,7 @@ if ("serviceWorker" in navigator) {
 
 initializeNoticeCardCollapseHandlers();
 initializeBottomNav();
+initializeHomeScrollReturn();
+window.history.replaceState(null, "", window.location.pathname + window.location.search);
+showAppView("home");
 loadBoards();

@@ -63,6 +63,10 @@ body::before {
   padding: 24px;
 }
 
+.app-view-hidden {
+  display: none !important;
+}
+
 .hero {
   padding: 24px 0 56px;
 }
