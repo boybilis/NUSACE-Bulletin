@@ -67,6 +67,30 @@ body::before {
   display: none !important;
 }
 
+.app-home-button {
+  position: fixed;
+  top: 18px;
+  right: 18px;
+  z-index: 1150;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--navy), var(--navy-deep));
+  border: 1px solid rgba(242, 194, 77, 0.78);
+  box-shadow: 0 14px 26px rgba(0, 58, 112, 0.2);
+  color: var(--gold);
+  text-decoration: none;
+  backdrop-filter: blur(14px);
+}
+
+.app-home-icon {
+  font-size: 1.2rem;
+  line-height: 1;
+}
+
 .hero {
   padding: 24px 0 56px;
 }
@@ -1087,6 +1111,13 @@ main {
 }
 
 @media (max-width: 720px) {
+  .app-home-button {
+    top: 14px;
+    right: 14px;
+    width: 48px;
+    height: 48px;
+  }
+
   .page-shell {
     padding: 18px;
   }

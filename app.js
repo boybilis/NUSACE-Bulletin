@@ -25,6 +25,7 @@ const feedbackVerifyButton = document.getElementById("feedbackVerifyButton");
 const feedbackResetButton = document.getElementById("feedbackResetButton");
 const feedbackSuccess = document.getElementById("feedbackSuccess");
 const feedbackError = document.getElementById("feedbackError");
+const appHomeButton = document.getElementById("appHomeButton");
 const homeHero = document.getElementById("homeHero");
 const appSections = [...document.querySelectorAll("[data-app-section]")];
 const appViewLinks = [...document.querySelectorAll("[data-app-view]")];
@@ -44,7 +45,6 @@ let activeBoardId = "sace";
 let feedbackOtpExpiresAt = null;
 let feedbackOtpTimer = null;
 let currentAppView = "home";
-let previousScrollY = 0;
 const expandedNoticeCards = new Set();
 const clientId = getClientId();
 
@@ -695,6 +695,7 @@ function showAppView(view) {
 
   const isHome = view === "home";
   homeHero?.classList.toggle("app-view-hidden", !isHome);
+  appHomeButton?.classList.toggle("app-view-hidden", isHome);
 
   appSections.forEach((section) => {
     section.classList.toggle("app-view-hidden", isHome || section.id !== view);
@@ -710,21 +711,6 @@ function showAppView(view) {
   requestAnimationFrame(() => {
     window.scrollTo({ top: 0, behavior: "smooth" });
   });
-}
-
-function initializeHomeScrollReturn() {
-  previousScrollY = window.scrollY;
-
-  window.addEventListener("scroll", () => {
-    const currentScrollY = window.scrollY;
-    const scrolledUp = currentScrollY < previousScrollY - 24;
-
-    if (currentAppView !== "home" && scrolledUp) {
-      showAppView("home");
-    }
-
-    previousScrollY = currentScrollY;
-  }, { passive: true });
 }
 
 function buildNoticeCard(notice, boardName = "") {
@@ -1013,6 +999,11 @@ clearTagFilter?.addEventListener("click", () => {
   renderBoard(activeBoardId || "sace");
 });
 
+appHomeButton?.addEventListener("click", (event) => {
+  event.preventDefault();
+  showAppView("home");
+});
+
 feedbackForm?.addEventListener("submit", async (event) => {
   event.preventDefault();
 
@@ -1098,7 +1089,6 @@ if ("serviceWorker" in navigator) {
 
 initializeNoticeCardCollapseHandlers();
 initializeBottomNav();
-initializeHomeScrollReturn();
 window.history.replaceState(null, "", window.location.pathname + window.location.search);
 showAppView("home");
 loadBoards();
