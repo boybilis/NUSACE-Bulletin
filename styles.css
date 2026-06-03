@@ -274,6 +274,8 @@ main {
 
 .highlight-card {
   position: relative;
+  display: flex;
+  flex-direction: column;
   padding: 18px;
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.78), rgba(255, 250, 241, 0.7));
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.9), rgba(242, 194, 77, 0.14));
@@ -321,8 +323,8 @@ main {
 
 .board-tab[aria-selected="true"] {
   background: var(--navy);
-  color: #fff;
-  border-color: rgba(0, 58, 112, 0.3);
+  color: #f2c24d;
+  border-color: rgba(242, 194, 77, 0.72);
 }
 
 .board-panel {
@@ -389,7 +391,8 @@ main {
 
 .tag-chip.is-active {
   background: var(--navy);
-  color: #fff;
+  color: #f2c24d;
+  border-color: rgba(242, 194, 77, 0.72);
 }
 
 .tag-filter-bar,
@@ -408,6 +411,11 @@ main {
 
 .highlight-card .notice-attachment {
   margin-top: 12px;
+}
+
+.highlight-card-footer {
+  margin-top: auto;
+  padding-top: 12px;
 }
 
 .attachment-link,
@@ -446,7 +454,8 @@ main {
 
 .scope-chip.is-active {
   background: var(--navy);
-  color: #fff;
+  color: #f2c24d;
+  border-color: rgba(242, 194, 77, 0.72);
 }
 
 .tag-filter-bar {

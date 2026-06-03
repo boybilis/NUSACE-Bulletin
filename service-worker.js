@@ -1,4 +1,4 @@
-const CACHE_NAME = "nusace-bulletin-v13";
+const CACHE_NAME = "nusace-bulletin-v15";
 const APP_ASSETS = [
   "./",
   "./index.html",
