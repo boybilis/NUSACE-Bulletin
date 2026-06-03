@@ -27,7 +27,7 @@ const feedbackSuccess = document.getElementById("feedbackSuccess");
 const feedbackError = document.getElementById("feedbackError");
 const CLIENT_ID_KEY = "nusaceBulletinClientId";
 const API_VERSION = "20260602-admin20";
-const MAX_NOTICE_PREVIEW_WORDS = 60;
+const MAX_NOTICE_PREVIEW_WORDS = 40;
 
 let deferredPrompt;
 let boards = [];
@@ -543,14 +543,39 @@ function closeAttachmentModal() {
 }
 
 function noticePreviewText(value, maxWords = MAX_NOTICE_PREVIEW_WORDS) {
-  const words = String(value || "").trim().split(/\s+/).filter(Boolean);
-  if (words.length <= maxWords) {
-    return { text: String(value || ""), truncated: false };
+  const source = String(value || "").trim();
+  const paragraphs = source.split(/\n\s*\n/).map((paragraph) => paragraph.trim()).filter(Boolean);
+  let usedWords = 0;
+  let truncated = false;
+  const previewParagraphs = [];
+
+  for (const paragraph of paragraphs) {
+    const words = paragraph.split(/\s+/).filter(Boolean);
+    if (usedWords >= maxWords) {
+      truncated = true;
+      break;
+    }
+
+    const remaining = maxWords - usedWords;
+    if (words.length <= remaining) {
+      previewParagraphs.push(paragraph);
+      usedWords += words.length;
+      continue;
+    }
+
+    previewParagraphs.push(`${words.slice(0, remaining).join(" ")}...`);
+    usedWords += remaining;
+    truncated = true;
+    break;
+  }
+
+  if (previewParagraphs.length === 0) {
+    return { text: source, truncated: false };
   }
 
   return {
-    text: `${words.slice(0, maxWords).join(" ")}...`,
-    truncated: true
+    text: previewParagraphs.join("\n\n"),
+    truncated
   };
 }
 
