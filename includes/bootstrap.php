@@ -4,6 +4,11 @@ declare(strict_types=1);
 
 session_start();
 
+$mailerConfigOverride = __DIR__ . '/mailer-config.local.php';
+if (is_file($mailerConfigOverride)) {
+    require_once $mailerConfigOverride;
+}
+
 const APP_ROOT = __DIR__ . '/..';
 const DATA_ROOT = APP_ROOT . '/data';
 const ATTACHMENT_ROOT = APP_ROOT . '/uploads/attachments';
@@ -119,6 +124,16 @@ function users_path(): string
 function board_reactions_path(string $boardId): string
 {
     return board_notice_directory($boardId) . '/reactions.json';
+}
+
+function board_feedback_path(string $boardId): string
+{
+    return board_notice_directory($boardId) . '/feedback.json';
+}
+
+function board_feedback_pending_path(string $boardId): string
+{
+    return board_notice_directory($boardId) . '/feedback-pending.json';
 }
 
 function attachment_public_path(string $filename): string
@@ -377,6 +392,445 @@ function write_partitioned_notices(array $notices): void
         ensure_board_notice_directory($boardId);
         write_json_file(board_notices_path($boardId), $partitioned[$boardId] ?? []);
     }
+}
+
+function feedback_type_options(): array
+{
+    return [
+        'praise_appreciation' => 'Praise/Appreciation',
+        'suggestion' => 'Suggestion',
+        'constructive_feedback' => 'Constructive Feedback',
+        'concern' => 'Concern',
+        'complaint' => 'Complaint',
+        'other' => 'Other',
+    ];
+}
+
+function feedback_types(): array
+{
+    return array_keys(feedback_type_options());
+}
+
+function feedback_type_label(string $type): string
+{
+    return feedback_type_options()[$type] ?? $type;
+}
+
+function valid_feedback_board_id(string $boardId): bool
+{
+    return valid_board_id($boardId);
+}
+
+function normalize_feedback_record(array $feedback): array
+{
+    return [
+        'id' => (string) ($feedback['id'] ?? ''),
+        'board_id' => (string) ($feedback['board_id'] ?? ''),
+        'type' => (string) ($feedback['type'] ?? 'other'),
+        'message' => trim((string) ($feedback['message'] ?? '')),
+        'is_anonymous' => (bool) ($feedback['is_anonymous'] ?? true),
+        'email' => (string) ($feedback['email'] ?? ''),
+        'created_at' => (string) ($feedback['created_at'] ?? ''),
+    ];
+}
+
+function normalize_feedback_pending_record(array $pending): array
+{
+    return [
+        'board_id' => (string) ($pending['board_id'] ?? ''),
+        'email' => strtolower(trim((string) ($pending['email'] ?? ''))),
+        'type' => (string) ($pending['type'] ?? 'other'),
+        'message' => trim((string) ($pending['message'] ?? '')),
+        'is_anonymous' => (bool) ($pending['is_anonymous'] ?? true),
+        'otp_hash' => (string) ($pending['otp_hash'] ?? ''),
+        'requested_at' => (string) ($pending['requested_at'] ?? ''),
+        'expires_at' => (string) ($pending['expires_at'] ?? ''),
+    ];
+}
+
+function normalize_feedback_email(string $email): string
+{
+    return strtolower(trim($email));
+}
+
+function valid_feedback_email(string $email): bool
+{
+    return filter_var(normalize_feedback_email($email), FILTER_VALIDATE_EMAIL) !== false;
+}
+
+function feedback_otp_expiry_seconds(): int
+{
+    return 120;
+}
+
+function feedback_for_board(string $boardId): array
+{
+    if (!valid_feedback_board_id($boardId)) {
+        return [];
+    }
+
+    $feedback = read_json_file_locked(board_feedback_path($boardId));
+    if (!is_array($feedback)) {
+        return [];
+    }
+
+    return array_map('normalize_feedback_record', $feedback);
+}
+
+function pending_feedback_for_board(string $boardId): array
+{
+    if (!valid_feedback_board_id($boardId)) {
+        return [];
+    }
+
+    $pending = read_json_file_locked(board_feedback_pending_path($boardId));
+    if (!is_array($pending)) {
+        return [];
+    }
+
+    return array_map('normalize_feedback_pending_record', $pending);
+}
+
+function sort_feedback_latest_first(array &$feedback): void
+{
+    usort(
+        $feedback,
+        static fn (array $left, array $right): int => strcmp((string) ($right['created_at'] ?? ''), (string) ($left['created_at'] ?? ''))
+    );
+}
+
+function mutate_feedback_for_board(string $boardId, callable $mutator): array
+{
+    if (!valid_feedback_board_id($boardId)) {
+        throw new RuntimeException('Invalid board selected.');
+    }
+
+    ensure_notice_storage_root();
+    ensure_board_notice_directory($boardId);
+
+    $path = board_feedback_path($boardId);
+    $handle = fopen($path, 'c+');
+    if ($handle === false) {
+        throw new RuntimeException('Unable to open feedback storage.');
+    }
+
+    try {
+        if (!flock($handle, LOCK_EX)) {
+            throw new RuntimeException('Unable to acquire feedback write lock.');
+        }
+
+        rewind($handle);
+        $content = stream_get_contents($handle);
+        $decoded = ($content === false || $content === '') ? [] : json_decode($content, true);
+        $feedback = is_array($decoded) ? array_map('normalize_feedback_record', $decoded) : [];
+
+        $updatedFeedback = $mutator($feedback);
+        if (!is_array($updatedFeedback)) {
+            throw new RuntimeException('Feedback mutation failed.');
+        }
+
+        $encoded = json_encode($updatedFeedback, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+        if ($encoded === false) {
+            throw new RuntimeException('Unable to encode feedback storage.');
+        }
+
+        ftruncate($handle, 0);
+        rewind($handle);
+        fwrite($handle, $encoded);
+        fflush($handle);
+        flock($handle, LOCK_UN);
+
+        return array_map('normalize_feedback_record', $updatedFeedback);
+    } finally {
+        fclose($handle);
+    }
+}
+
+function mutate_pending_feedback_for_board(string $boardId, callable $mutator): array
+{
+    if (!valid_feedback_board_id($boardId)) {
+        throw new RuntimeException('Invalid board selected.');
+    }
+
+    ensure_notice_storage_root();
+    ensure_board_notice_directory($boardId);
+
+    $path = board_feedback_pending_path($boardId);
+    $handle = fopen($path, 'c+');
+    if ($handle === false) {
+        throw new RuntimeException('Unable to open pending feedback storage.');
+    }
+
+    try {
+        if (!flock($handle, LOCK_EX)) {
+            throw new RuntimeException('Unable to acquire pending feedback write lock.');
+        }
+
+        rewind($handle);
+        $content = stream_get_contents($handle);
+        $decoded = ($content === false || $content === '') ? [] : json_decode($content, true);
+        $pending = is_array($decoded) ? array_map('normalize_feedback_pending_record', $decoded) : [];
+
+        $updatedPending = $mutator($pending);
+        if (!is_array($updatedPending)) {
+            throw new RuntimeException('Pending feedback mutation failed.');
+        }
+
+        $encoded = json_encode($updatedPending, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+        if ($encoded === false) {
+            throw new RuntimeException('Unable to encode pending feedback storage.');
+        }
+
+        ftruncate($handle, 0);
+        rewind($handle);
+        fwrite($handle, $encoded);
+        fflush($handle);
+        flock($handle, LOCK_UN);
+
+        return array_map('normalize_feedback_pending_record', $updatedPending);
+    } finally {
+        fclose($handle);
+    }
+}
+
+function prune_expired_pending_feedback(array $pending): array
+{
+    $now = gmdate('c');
+
+    return array_values(array_filter(
+        $pending,
+        static fn (array $item): bool => (string) ($item['expires_at'] ?? '') > $now
+    ));
+}
+
+function env_value(string $key, ?string $default = null): ?string
+{
+    $value = getenv($key);
+    if ($value === false || $value === '') {
+        return $default;
+    }
+
+    return $value;
+}
+
+function mailer_settings(): array
+{
+    return [
+        'host' => env_value('SMTP_HOST', defined('SMTP_HOST') ? SMTP_HOST : null),
+        'port' => (int) env_value('SMTP_PORT', defined('SMTP_PORT') ? (string) SMTP_PORT : '465'),
+        'username' => env_value('SMTP_USERNAME', defined('SMTP_USERNAME') ? SMTP_USERNAME : null),
+        'password' => env_value('SMTP_PASSWORD', defined('SMTP_PASSWORD') ? SMTP_PASSWORD : null),
+        'encryption' => env_value('SMTP_ENCRYPTION', defined('SMTP_ENCRYPTION') ? SMTP_ENCRYPTION : 'ssl'),
+        'from_email' => env_value('SMTP_FROM_EMAIL', defined('SMTP_FROM_EMAIL') ? SMTP_FROM_EMAIL : null),
+        'from_name' => env_value('SMTP_FROM_NAME', defined('SMTP_FROM_NAME') ? SMTP_FROM_NAME : 'NU Lipa SACE Bulletin'),
+    ];
+}
+
+function mailer_library_paths(): array
+{
+    return [
+        APP_ROOT . '/vendor/autoload.php',
+        APP_ROOT . '/includes/PHPMailer/src/PHPMailer.php',
+        APP_ROOT . '/includes/vendor/phpmailer/src/PHPMailer.php',
+    ];
+}
+
+function ensure_phpmailer_loaded(): void
+{
+    if (class_exists(\PHPMailer\PHPMailer\PHPMailer::class)) {
+        return;
+    }
+
+    $vendorAutoload = APP_ROOT . '/vendor/autoload.php';
+    if (is_file($vendorAutoload)) {
+        require_once $vendorAutoload;
+    }
+
+    if (class_exists(\PHPMailer\PHPMailer\PHPMailer::class)) {
+        return;
+    }
+
+    $roots = [
+        APP_ROOT . '/includes/PHPMailer/src',
+        APP_ROOT . '/includes/vendor/phpmailer/src',
+    ];
+
+    foreach ($roots as $phpmailerRoot) {
+        $requiredFiles = [
+            $phpmailerRoot . '/Exception.php',
+            $phpmailerRoot . '/PHPMailer.php',
+            $phpmailerRoot . '/SMTP.php',
+        ];
+
+        $allPresent = true;
+        foreach ($requiredFiles as $file) {
+            if (!is_file($file)) {
+                $allPresent = false;
+                break;
+            }
+        }
+
+        if ($allPresent) {
+            foreach ($requiredFiles as $file) {
+                require_once $file;
+            }
+            break;
+        }
+    }
+
+    if (!class_exists(\PHPMailer\PHPMailer\PHPMailer::class)) {
+        throw new RuntimeException('PHPMailer is not installed. Add it via Composer vendor/autoload.php or place PHPMailer under includes/PHPMailer/src or includes/vendor/phpmailer/src.');
+    }
+}
+
+function send_feedback_otp_email(string $email, string $otp, string $boardName): void
+{
+    ensure_phpmailer_loaded();
+
+    $settings = mailer_settings();
+    foreach (['host', 'port', 'username', 'password', 'from_email'] as $requiredKey) {
+        if (empty($settings[$requiredKey])) {
+            throw new RuntimeException('SMTP mail settings are incomplete. Configure Hostinger SMTP before sending OTP emails.');
+        }
+    }
+
+    $subject = 'NU Lipa SACE Feedback OTP';
+    $body = "Your one-time password for submitting feedback to {$boardName} is {$otp}. This code expires in 2 minutes.";
+
+    try {
+        $mailer = new \PHPMailer\PHPMailer\PHPMailer(true);
+        $mailer->isSMTP();
+        $mailer->Host = (string) $settings['host'];
+        $mailer->Port = (int) $settings['port'];
+        $mailer->SMTPAuth = true;
+        $mailer->Username = (string) $settings['username'];
+        $mailer->Password = (string) $settings['password'];
+        $mailer->SMTPSecure = (string) $settings['encryption'];
+        $mailer->CharSet = 'UTF-8';
+
+        $mailer->setFrom((string) $settings['from_email'], (string) $settings['from_name']);
+        $mailer->addAddress($email);
+        $mailer->Subject = $subject;
+        $mailer->Body = $body;
+        $mailer->isHTML(false);
+        $mailer->send();
+    } catch (\PHPMailer\PHPMailer\Exception $exception) {
+        throw new RuntimeException('Unable to send the OTP email. Check your Hostinger SMTP settings. ' . $exception->getMessage());
+    }
+}
+
+function request_feedback_otp(string $boardId, string $type, string $message, string $email, bool $isAnonymous): string
+{
+    if (!valid_feedback_board_id($boardId)) {
+        throw new RuntimeException('Please select a valid department.');
+    }
+
+    if (!in_array($type, feedback_types(), true)) {
+        throw new RuntimeException('Please select a valid feedback type.');
+    }
+
+    $message = trim($message);
+    if ($message === '') {
+        throw new RuntimeException('Feedback message is required.');
+    }
+
+    $messageLength = function_exists('mb_strlen') ? mb_strlen($message) : strlen($message);
+    if ($messageLength > 3000) {
+        throw new RuntimeException('Feedback message must be 3000 characters or fewer.');
+    }
+
+    $email = normalize_feedback_email($email);
+    if (!valid_feedback_email($email)) {
+        throw new RuntimeException('A valid email address is required for OTP verification.');
+    }
+
+    $otp = str_pad((string) random_int(0, 999999), 6, '0', STR_PAD_LEFT);
+    $requestedAt = gmdate('c');
+    $expiresAt = gmdate('c', time() + feedback_otp_expiry_seconds());
+
+    mutate_pending_feedback_for_board($boardId, static function (array $pending) use ($boardId, $type, $message, $email, $isAnonymous, $otp, $requestedAt, $expiresAt): array {
+        $pending = prune_expired_pending_feedback($pending);
+        $pending = array_values(array_filter(
+            $pending,
+            static fn (array $item): bool => normalize_feedback_email((string) ($item['email'] ?? '')) !== $email
+        ));
+
+        $pending[] = [
+            'board_id' => $boardId,
+            'email' => $email,
+            'type' => $type,
+            'message' => $message,
+            'is_anonymous' => $isAnonymous,
+            'otp_hash' => password_hash($otp, PASSWORD_DEFAULT),
+            'requested_at' => $requestedAt,
+            'expires_at' => $expiresAt,
+        ];
+
+        return $pending;
+    });
+
+    send_feedback_otp_email($email, $otp, board_catalog()[$boardId]['name'] ?? $boardId);
+
+    return $expiresAt;
+}
+
+function verify_feedback_otp_and_save(string $boardId, string $email, string $otp): void
+{
+    if (!valid_feedback_board_id($boardId)) {
+        throw new RuntimeException('Please select a valid department.');
+    }
+
+    $email = normalize_feedback_email($email);
+    if (!valid_feedback_email($email)) {
+        throw new RuntimeException('A valid email address is required.');
+    }
+
+    $otp = trim($otp);
+    if ($otp === '') {
+        throw new RuntimeException('OTP is required.');
+    }
+
+    $matched = null;
+
+    mutate_pending_feedback_for_board($boardId, static function (array $pending) use ($email, $otp, &$matched): array {
+        $pending = prune_expired_pending_feedback($pending);
+        $remaining = [];
+
+        foreach ($pending as $item) {
+            $sameEmail = normalize_feedback_email((string) ($item['email'] ?? '')) === $email;
+            if (!$sameEmail) {
+                $remaining[] = $item;
+                continue;
+            }
+
+            if (!password_verify($otp, (string) ($item['otp_hash'] ?? ''))) {
+                $remaining[] = $item;
+                continue;
+            }
+
+            $matched = $item;
+        }
+
+        return $remaining;
+    });
+
+    if ($matched === null) {
+        throw new RuntimeException('Invalid or expired OTP.');
+    }
+
+    mutate_feedback_for_board($boardId, static function (array $feedback) use ($matched, $email): array {
+        $feedback[] = [
+            'id' => uniqid('feedback_', true),
+            'board_id' => (string) ($matched['board_id'] ?? ''),
+            'type' => (string) ($matched['type'] ?? 'report'),
+            'message' => (string) ($matched['message'] ?? ''),
+            'is_anonymous' => (bool) ($matched['is_anonymous'] ?? true),
+            'email' => !empty($matched['is_anonymous']) ? '' : $email,
+            'created_at' => gmdate('c'),
+        ];
+
+        return $feedback;
+    });
 }
 
 function all_reactions(): array
@@ -665,6 +1119,16 @@ function mutate_notices(callable $mutator): array
 function today_ymd(): string
 {
     return date('Y-m-d');
+}
+
+function format_datetime_label(string $value): string
+{
+    $timestamp = strtotime($value);
+    if ($timestamp === false) {
+        return $value;
+    }
+
+    return date('F j, Y g:i A', $timestamp);
 }
 
 function shift_ymd(string $date, int $days): string

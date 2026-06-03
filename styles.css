@@ -599,6 +599,46 @@ main {
   color: rgba(16, 35, 59, 0.9);
 }
 
+.feedback-section {
+  display: grid;
+  gap: 18px;
+}
+
+.feedback-shell {
+  display: grid;
+  gap: 18px;
+  padding: 24px;
+}
+
+.feedback-copy {
+  display: grid;
+  gap: 8px;
+  max-width: 72ch;
+}
+
+.feedback-copy .lead,
+.feedback-copy .notice-date {
+  margin: 0;
+}
+
+.feedback-form {
+  display: grid;
+  gap: 16px;
+}
+
+.feedback-otp-panel {
+  display: grid;
+  gap: 14px;
+  padding: 18px;
+  border-radius: 18px;
+  background: rgba(0, 58, 112, 0.04);
+  border: 1px solid rgba(0, 58, 112, 0.08);
+}
+
+.feedback-submit {
+  font: inherit;
+}
+
 .highlight-card .notice-date {
   margin-top: 12px;
   color: rgba(16, 35, 59, 0.56);
@@ -799,6 +839,23 @@ main {
 
 .admin-inline-form {
   margin: 0;
+}
+
+.admin-feedback-block {
+  display: grid;
+  gap: 12px;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(0, 58, 112, 0.08);
+}
+
+.admin-feedback-item {
+  display: grid;
+  gap: 8px;
+  padding: 14px 16px;
+  border-radius: 16px;
+  background: rgba(0, 58, 112, 0.04);
+  border: 1px solid rgba(0, 58, 112, 0.08);
 }
 
 .admin-delete-btn {

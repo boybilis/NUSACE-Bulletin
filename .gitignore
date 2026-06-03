@@ -17,3 +17,6 @@ data/notices/cpe/notices.json
 data/notices/cpe/reactions.json
 data/notices/engineering/notices.json
 data/notices/engineering/reactions.json
+data/notices/*/feedback.json
+data/notices/*/feedback-pending.json
+includes/mailer-config.local.php

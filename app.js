@@ -12,6 +12,19 @@ const attachmentModalBody = document.getElementById("attachmentModalBody");
 const attachmentModalName = document.getElementById("attachmentModalName");
 const attachmentModalOpen = document.getElementById("attachmentModalOpen");
 const attachmentModalClose = document.getElementById("attachmentModalClose");
+const feedbackForm = document.getElementById("feedbackForm");
+const feedbackBoard = document.getElementById("feedbackBoard");
+const feedbackType = document.getElementById("feedbackType");
+const feedbackMessage = document.getElementById("feedbackMessage");
+const feedbackAnonymous = document.getElementById("feedbackAnonymous");
+const feedbackEmail = document.getElementById("feedbackEmail");
+const feedbackOtpPanel = document.getElementById("feedbackOtpPanel");
+const feedbackOtp = document.getElementById("feedbackOtp");
+const feedbackOtpStatus = document.getElementById("feedbackOtpStatus");
+const feedbackVerifyButton = document.getElementById("feedbackVerifyButton");
+const feedbackResetButton = document.getElementById("feedbackResetButton");
+const feedbackSuccess = document.getElementById("feedbackSuccess");
+const feedbackError = document.getElementById("feedbackError");
 const CLIENT_ID_KEY = "nusaceBulletinClientId";
 const API_VERSION = "20260602-admin20";
 
@@ -23,6 +36,8 @@ let todayValue = null;
 let priorityNotices = [];
 let hasReloadedForUpdate = false;
 let activeBoardId = "sace";
+let feedbackOtpExpiresAt = null;
+let feedbackOtpTimer = null;
 const clientId = getClientId();
 
 function compareNotices(left, right) {
@@ -225,6 +240,27 @@ function renderTabs(activeId) {
   });
 }
 
+function populateFeedbackBoards() {
+  if (!feedbackBoard) {
+    return;
+  }
+
+  const previousValue = feedbackBoard.value;
+  feedbackBoard.innerHTML = '<option value="">Select a department</option>';
+
+  boards.forEach((board) => {
+    const option = document.createElement("option");
+    option.value = board.id;
+    option.textContent = board.name;
+    feedbackBoard.appendChild(option);
+  });
+
+  feedbackBoard.value = previousValue || activeBoardId || "";
+  if (!feedbackBoard.value && feedbackBoard.options.length > 1) {
+    feedbackBoard.selectedIndex = 1;
+  }
+}
+
 function createTagChip(tag) {
   const button = document.createElement("button");
   button.type = "button";
@@ -236,6 +272,185 @@ function createTagChip(tag) {
 
 function normalizeAttachmentUrl(path) {
   return typeof path === "string" ? path.replace(/^\.?\//, "") : "";
+}
+
+function clearFeedbackMessages() {
+  if (feedbackSuccess) {
+    feedbackSuccess.hidden = true;
+    feedbackSuccess.textContent = "";
+  }
+
+  if (feedbackError) {
+    feedbackError.hidden = true;
+    feedbackError.textContent = "";
+  }
+}
+
+function setFeedbackError(message) {
+  if (!feedbackError) {
+    return;
+  }
+
+  feedbackError.textContent = message;
+  feedbackError.hidden = false;
+  if (feedbackSuccess) {
+    feedbackSuccess.hidden = true;
+  }
+}
+
+function setFeedbackSuccess(message) {
+  if (!feedbackSuccess) {
+    return;
+  }
+
+  feedbackSuccess.textContent = message;
+  feedbackSuccess.hidden = false;
+  if (feedbackError) {
+    feedbackError.hidden = true;
+  }
+}
+
+function setFeedbackFieldsDisabled(disabled) {
+  [feedbackBoard, feedbackType, feedbackMessage, feedbackAnonymous, feedbackEmail].forEach((field) => {
+    if (field) {
+      field.disabled = disabled;
+    }
+  });
+}
+
+function resetFeedbackOtpState() {
+  feedbackOtpExpiresAt = null;
+
+  if (feedbackOtpTimer !== null) {
+    window.clearInterval(feedbackOtpTimer);
+    feedbackOtpTimer = null;
+  }
+
+  if (feedbackOtpPanel) {
+    feedbackOtpPanel.hidden = true;
+  }
+
+  if (feedbackOtp) {
+    feedbackOtp.value = "";
+  }
+
+  if (feedbackOtpStatus) {
+    feedbackOtpStatus.textContent = "Enter the code from your email.";
+  }
+
+  setFeedbackFieldsDisabled(false);
+}
+
+function resetFeedbackForm() {
+  feedbackForm?.reset();
+  if (feedbackAnonymous) {
+    feedbackAnonymous.checked = true;
+  }
+  populateFeedbackBoards();
+  if (feedbackBoard && activeBoardId) {
+    feedbackBoard.value = activeBoardId;
+  }
+  resetFeedbackOtpState();
+  clearFeedbackMessages();
+}
+
+function formatOtpCountdown(targetTime) {
+  const remainingMs = Math.max(0, targetTime - Date.now());
+  const totalSeconds = Math.ceil(remainingMs / 1000);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}:${String(seconds).padStart(2, "0")}`;
+}
+
+function startFeedbackOtpCountdown(expiresAt) {
+  feedbackOtpExpiresAt = new Date(expiresAt).getTime();
+  if (Number.isNaN(feedbackOtpExpiresAt)) {
+    setFeedbackError("Invalid OTP expiry returned by the server.");
+    return;
+  }
+
+  if (feedbackOtpPanel) {
+    feedbackOtpPanel.hidden = false;
+  }
+
+  setFeedbackFieldsDisabled(true);
+
+  const tick = () => {
+    if (!feedbackOtpStatus || feedbackOtpExpiresAt === null) {
+      return;
+    }
+
+    const remaining = feedbackOtpExpiresAt - Date.now();
+    if (remaining <= 0) {
+      feedbackOtpStatus.textContent = "OTP expired. Request a new code.";
+      if (feedbackOtpTimer !== null) {
+        window.clearInterval(feedbackOtpTimer);
+        feedbackOtpTimer = null;
+      }
+      return;
+    }
+
+    feedbackOtpStatus.textContent = `Enter the code from your email. Expires in ${formatOtpCountdown(feedbackOtpExpiresAt)}.`;
+  };
+
+  if (feedbackOtpTimer !== null) {
+    window.clearInterval(feedbackOtpTimer);
+  }
+
+  tick();
+  feedbackOtpTimer = window.setInterval(tick, 1000);
+}
+
+async function requestFeedbackOtp() {
+  clearFeedbackMessages();
+
+  const response = await fetch("api/feedback.php", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      action: "request_otp",
+      board_id: feedbackBoard?.value || "",
+      type: feedbackType?.value || "",
+      message: feedbackMessage?.value || "",
+      email: feedbackEmail?.value || "",
+      is_anonymous: Boolean(feedbackAnonymous?.checked)
+    })
+  });
+
+  const payload = await response.json();
+  if (!response.ok) {
+    throw new Error(payload.error || `Request failed: ${response.status}`);
+  }
+
+  setFeedbackSuccess(payload.message || "OTP sent.");
+  startFeedbackOtpCountdown(payload.expires_at);
+}
+
+async function verifyFeedbackOtp() {
+  clearFeedbackMessages();
+
+  const response = await fetch("api/feedback.php", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      action: "verify_otp",
+      board_id: feedbackBoard?.value || "",
+      email: feedbackEmail?.value || "",
+      otp: feedbackOtp?.value || ""
+    })
+  });
+
+  const payload = await response.json();
+  if (!response.ok) {
+    throw new Error(payload.error || `Request failed: ${response.status}`);
+  }
+
+  resetFeedbackForm();
+  setFeedbackSuccess(payload.message || "Feedback submitted successfully.");
 }
 
 function reactionData(notice, type) {
@@ -554,6 +769,13 @@ async function loadBoards() {
     priorityNotices = Array.isArray(payload.priorityNotices) ? payload.priorityNotices : [];
     todayValue = payload.today || null;
     activeBoardId = payload.defaultBoardId || "sace";
+    populateFeedbackBoards();
+    if (feedbackBoard) {
+      feedbackBoard.value = activeBoardId;
+      if (!feedbackBoard.value && feedbackBoard.options.length > 1) {
+        feedbackBoard.selectedIndex = 1;
+      }
+    }
     renderHighlights();
     await renderBoard(activeBoardId);
   } catch (error) {
@@ -589,6 +811,28 @@ installButton.addEventListener("click", async () => {
 clearTagFilter?.addEventListener("click", () => {
   activeTag = null;
   renderBoard(activeBoardId || "sace");
+});
+
+feedbackForm?.addEventListener("submit", async (event) => {
+  event.preventDefault();
+
+  try {
+    await requestFeedbackOtp();
+  } catch (error) {
+    setFeedbackError(error.message);
+  }
+});
+
+feedbackVerifyButton?.addEventListener("click", async () => {
+  try {
+    await verifyFeedbackOtp();
+  } catch (error) {
+    setFeedbackError(error.message);
+  }
+});
+
+feedbackResetButton?.addEventListener("click", () => {
+  resetFeedbackForm();
 });
 
 attachmentModalClose?.addEventListener("click", closeAttachmentModal);

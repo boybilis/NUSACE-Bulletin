@@ -98,6 +98,73 @@
         </div>
         <div class="board-panel" id="boardPanel"></div>
       </section>
+
+      <section class="feedback-section" id="feedback">
+        <div class="section-heading">
+          <p class="eyebrow">Feedback</p>
+          <h2>Send a report, rant, or praise to a specific department</h2>
+        </div>
+        <div class="feedback-shell glass-panel">
+          <div class="feedback-copy">
+            <p class="lead">Feedback is visible only to the Dean. An email is required for OTP verification, and if you choose anonymous, your email is not stored with the final feedback.</p>
+            <p class="notice-date">OTP codes expire after 2 minutes.</p>
+          </div>
+          <form class="feedback-form" id="feedbackForm">
+            <label class="admin-field">
+              <span>Department</span>
+              <select id="feedbackBoard" required>
+                <option value="">Select a department</option>
+              </select>
+            </label>
+
+            <label class="admin-field">
+              <span>Feedback Type</span>
+              <select id="feedbackType" required>
+                <option value="praise_appreciation">Praise/Appreciation</option>
+                <option value="suggestion">Suggestion</option>
+                <option value="constructive_feedback">Constructive Feedback</option>
+                <option value="concern">Concern</option>
+                <option value="complaint">Complaint</option>
+                <option value="other">Other</option>
+              </select>
+            </label>
+
+            <label class="admin-field">
+              <span>Your Feedback</span>
+              <textarea id="feedbackMessage" rows="6" maxlength="3000" required></textarea>
+            </label>
+
+            <label class="admin-check">
+              <input type="checkbox" id="feedbackAnonymous" checked>
+              <span>Submit anonymously. Your email is only used for OTP verification and will not be saved.</span>
+            </label>
+
+            <label class="admin-field">
+              <span>Email for OTP</span>
+              <input type="email" id="feedbackEmail" required>
+              <small class="admin-field-help">We send a one-time password to this email to verify the submission.</small>
+            </label>
+
+            <div class="admin-actions">
+              <button type="submit" class="primary-link feedback-submit">Send OTP</button>
+            </div>
+
+            <div class="feedback-otp-panel" id="feedbackOtpPanel" hidden>
+              <label class="admin-field">
+                <span>OTP Code</span>
+                <input type="text" id="feedbackOtp" inputmode="numeric" autocomplete="one-time-code" maxlength="6">
+                <small class="admin-field-help" id="feedbackOtpStatus">Enter the code from your email.</small>
+              </label>
+              <div class="admin-actions">
+                <button type="button" class="primary-link feedback-submit" id="feedbackVerifyButton">Verify OTP and Submit</button>
+                <button type="button" class="secondary-link" id="feedbackResetButton">Start Over</button>
+              </div>
+            </div>
+          </form>
+          <p class="admin-success" id="feedbackSuccess" hidden></p>
+          <p class="admin-alert" id="feedbackError" hidden></p>
+        </div>
+      </section>
     </main>
   </div>
 
@@ -146,6 +213,6 @@
     </div>
   </div>
 
-  <script src="app.js?v=20260602-admin19"></script>
+  <script src="app.js?v=20260603-feedback1"></script>
 </body>
 </html>

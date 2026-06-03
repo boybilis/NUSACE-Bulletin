@@ -310,6 +310,15 @@ $visibleNotices = array_values(array_filter(
 ));
 
 sort_notices($visibleNotices);
+
+$deanFeedbackByBoard = [];
+if (($user['role'] ?? '') === 'dean') {
+    foreach ($boardCatalog as $boardId => $_board) {
+        $feedback = feedback_for_board($boardId);
+        sort_feedback_latest_first($feedback);
+        $deanFeedbackByBoard[$boardId] = $feedback;
+    }
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -534,6 +543,18 @@ sort_notices($visibleNotices);
         <article class="admin-list glass-panel">
           <p class="eyebrow">Dean Controls</p>
           <h2>Reset program chair accounts</h2>
+          <?php if (!empty($deanFeedbackByBoard['sace'])): ?>
+            <div class="admin-feedback-block">
+              <p class="admin-notice-board">NULIPA-SACE School-wide Feedback</p>
+              <?php foreach ($deanFeedbackByBoard['sace'] as $feedback): ?>
+                <article class="admin-feedback-item">
+                  <p class="admin-notice-meta"><?= e(feedback_type_label((string) $feedback['type'])) ?> | <?= e(format_datetime_label((string) $feedback['created_at'])) ?></p>
+                  <p class="admin-notice-meta"><?= !empty($feedback['is_anonymous']) ? 'Anonymous sender' : 'Sender email: ' . e((string) $feedback['email']) ?></p>
+                  <p class="admin-notice-body"><?= nl2br(e((string) $feedback['message'])) ?></p>
+                </article>
+              <?php endforeach; ?>
+            </div>
+          <?php endif; ?>
           <div class="admin-notice-list">
             <?php foreach ($allUsers as $account): ?>
               <?php if (($account['role'] ?? '') !== 'program_chair'): ?>
@@ -554,6 +575,23 @@ sort_notices($visibleNotices);
                   <input type="hidden" name="target_username" value="<?= e((string) $account['username']) ?>">
                   <button type="submit" class="admin-delete-btn">Reset Account</button>
                 </form>
+                <?php $accountBoardId = (string) (($account['board_ids'][0] ?? '')); ?>
+                <?php if ($accountBoardId !== '' && isset($deanFeedbackByBoard[$accountBoardId])): ?>
+                  <div class="admin-feedback-block">
+                    <p class="admin-notice-meta">Feedback for <?= e((string) ($boardCatalog[$accountBoardId]['name'] ?? $accountBoardId)) ?></p>
+                    <?php if ($deanFeedbackByBoard[$accountBoardId] === []): ?>
+                      <p class="admin-notice-meta">No feedback submitted yet.</p>
+                    <?php else: ?>
+                      <?php foreach ($deanFeedbackByBoard[$accountBoardId] as $feedback): ?>
+                        <article class="admin-feedback-item">
+                          <p class="admin-notice-meta"><?= e(feedback_type_label((string) $feedback['type'])) ?> | <?= e(format_datetime_label((string) $feedback['created_at'])) ?></p>
+                          <p class="admin-notice-meta"><?= !empty($feedback['is_anonymous']) ? 'Anonymous sender' : 'Sender email: ' . e((string) $feedback['email']) ?></p>
+                          <p class="admin-notice-body"><?= nl2br(e((string) $feedback['message'])) ?></p>
+                        </article>
+                      <?php endforeach; ?>
+                    <?php endif; ?>
+                  </div>
+                <?php endif; ?>
               </article>
             <?php endforeach; ?>
           </div>
