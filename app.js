@@ -13,6 +13,7 @@ const attachmentModalName = document.getElementById("attachmentModalName");
 const attachmentModalOpen = document.getElementById("attachmentModalOpen");
 const attachmentModalClose = document.getElementById("attachmentModalClose");
 const CLIENT_ID_KEY = "nusaceBulletinClientId";
+const API_VERSION = "20260602-admin20";
 
 let deferredPrompt;
 let boards = [];
@@ -21,6 +22,7 @@ let activeScope = "all";
 let todayValue = null;
 let priorityNotices = [];
 let hasReloadedForUpdate = false;
+let activeBoardId = "sace";
 const clientId = getClientId();
 
 function compareNotices(left, right) {
@@ -367,7 +369,60 @@ function renderEmptyBoard(message) {
   `;
 }
 
-function renderBoard(boardId) {
+function renderLoadingBoard(message) {
+  boardPanel.innerHTML = `
+    <section class="board-overview">
+      <div class="board-copy">
+        <p class="eyebrow">Loading notices</p>
+        <h3>Fetching the latest board feed</h3>
+        <p>${escapeHtml(message)}</p>
+      </div>
+    </section>
+  `;
+}
+
+async function fetchBoard(boardId) {
+  const response = await fetch(`api/boards.php?v=${API_VERSION}&client_id=${encodeURIComponent(clientId)}&board_id=${encodeURIComponent(boardId)}`, {
+    cache: "no-store"
+  });
+
+  const payload = await response.json();
+  if (!response.ok) {
+    throw new Error(payload.error || `Request failed: ${response.status}`);
+  }
+
+  return payload.board || null;
+}
+
+async function ensureBoardNoticesLoaded(boardId) {
+  const board = boards.find((item) => item.id === boardId);
+  if (!board) {
+    return null;
+  }
+
+  if (board.noticesLoaded) {
+    return board;
+  }
+
+  const payload = await fetchBoard(boardId);
+  if (!payload) {
+    throw new Error("Board payload is missing.");
+  }
+
+  board.notices = Array.isArray(payload.notices) ? payload.notices : [];
+  board.noticesLoaded = true;
+  return board;
+}
+
+async function ensureAllBoardNoticesLoaded() {
+  await Promise.all(
+    boards.map(async (board) => {
+      await ensureBoardNoticesLoaded(board.id);
+    })
+  );
+}
+
+async function renderBoard(boardId) {
   const activeBoard = boards.find((board) => board.id === boardId) || boards[0];
 
   if (!activeBoard) {
@@ -375,9 +430,21 @@ function renderBoard(boardId) {
     return;
   }
 
+  activeBoardId = activeBoard.id;
   updateTagFilterBar();
   updateScopeButtons();
   renderTabs(activeBoard.id);
+
+  if (!activeBoard.noticesLoaded) {
+    renderLoadingBoard(`Loading notices for ${activeBoard.name}.`);
+
+    try {
+      await ensureBoardNoticesLoaded(activeBoard.id);
+    } catch (error) {
+      renderEmptyBoard(error.message);
+      return;
+    }
+  }
 
   const visibleNotices = filterNotices([...activeBoard.notices]).sort(compareNotices);
   const topTags = topTagsFromNotices(visibleNotices);
@@ -413,11 +480,20 @@ function renderBoard(boardId) {
   });
 }
 
-function renderTaggedNotices(tag) {
+async function renderTaggedNotices(tag) {
   activeTag = tag;
   updateTagFilterBar();
   updateScopeButtons();
   renderTabs("");
+
+  renderLoadingBoard(`Loading notices tagged "${tag}" across all boards.`);
+
+  try {
+    await ensureAllBoardNoticesLoaded();
+  } catch (error) {
+    renderEmptyBoard(error.message);
+    return;
+  }
 
   const matchingNotices = filterNotices(
     boards.flatMap((board) =>
@@ -459,7 +535,7 @@ function renderTaggedNotices(tag) {
 
 async function loadBoards() {
   try {
-    const response = await fetch(`api/boards.php?v=20260602-admin19&client_id=${encodeURIComponent(clientId)}`, {
+    const response = await fetch(`api/boards.php?v=${API_VERSION}&client_id=${encodeURIComponent(clientId)}`, {
       cache: "no-store"
     });
 
@@ -468,11 +544,16 @@ async function loadBoards() {
     }
 
     const payload = await response.json();
-    boards = Array.isArray(payload.boards) ? payload.boards : [];
+    boards = Array.isArray(payload.boards) ? payload.boards.map((board) => ({
+      ...board,
+      notices: Array.isArray(board.notices) ? board.notices : [],
+      noticesLoaded: Array.isArray(board.notices) && board.notices.length > 0
+    })) : [];
     priorityNotices = Array.isArray(payload.priorityNotices) ? payload.priorityNotices : [];
     todayValue = payload.today || null;
+    activeBoardId = payload.defaultBoardId || "sace";
     renderHighlights();
-    renderBoard(payload.defaultBoardId || "sace");
+    await renderBoard(activeBoardId);
   } catch (error) {
     highlightStrip.innerHTML = `
       <article class="highlight-card">
@@ -505,7 +586,7 @@ installButton.addEventListener("click", async () => {
 
 clearTagFilter?.addEventListener("click", () => {
   activeTag = null;
-  renderBoard("sace");
+  renderBoard(activeBoardId || "sace");
 });
 
 attachmentModalClose?.addEventListener("click", closeAttachmentModal);
@@ -529,13 +610,13 @@ scopeFilterBar?.querySelectorAll("[data-scope]").forEach((button) => {
       renderTaggedNotices(activeTag);
       return;
     }
-    renderBoard("sace");
+    renderBoard(activeBoardId || "sace");
   });
 });
 
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
-    navigator.serviceWorker.register("service-worker.js?v=20260602-admin19", {
+    navigator.serviceWorker.register(`service-worker.js?v=${API_VERSION}`, {
       updateViaCache: "none"
     }).then((registration) => {
       if (registration.waiting) {

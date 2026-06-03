@@ -1,0 +1,44 @@
+[
+    {
+        "id": "notice_6a1e7923ebbd94.44682330",
+        "board_id": "information-technology",
+        "category": "Examination Schedule",
+        "audience": "Students and Faculties",
+        "title": "3rd Term Ay 25-26 Finals Schedule",
+        "date": "2026-06-02",
+        "visible_from": "2026-06-01",
+        "visible_until": "2026-06-06",
+        "text": "Final Exam: June 1-6\r\nGrade Consultation: June 8-9\r\nGrade Encoding: June 10",
+        "tags": [
+            "Examination"
+        ],
+        "created_by": "chair.information-technology",
+        "created_by_name": "BS Information Technology Program Chair",
+        "pinned": true,
+        "created_at": "2026-06-02T06:33:07+00:00",
+        "updated_at": "2026-06-02T06:33:07+00:00",
+        "attachment": null,
+        "tag": "Examination"
+    },
+    {
+        "id": "notice_6a1e93e4349e57.80594360",
+        "board_id": "information-technology",
+        "category": "Enrollment",
+        "audience": "Students",
+        "title": "Students with Enrollment Problem",
+        "date": "2026-06-02",
+        "visible_from": "2026-06-02",
+        "visible_until": "2026-07-31",
+        "text": "All irregular students/students with subject registration problems, please visit your program chair before paying your downpayment / tuition fee for 1st Term AY26-27",
+        "tags": [
+            "irregular students"
+        ],
+        "created_by": "chair.information-technology",
+        "created_by_name": "BS Information Technology Program Chair",
+        "pinned": true,
+        "created_at": "2026-06-02T08:27:16+00:00",
+        "updated_at": "2026-06-02T08:27:16+00:00",
+        "attachment": null,
+        "tag": "irregular students"
+    }
+]

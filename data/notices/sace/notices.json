@@ -1,0 +1,23 @@
+[
+    {
+        "id": "notice_6a1e8e6ac1c029.23918652",
+        "board_id": "sace",
+        "category": "Faculty Advisory",
+        "audience": "Faculty",
+        "title": "Last Day of Grade Encoding 3rd Term AY25-26",
+        "date": "2026-06-02",
+        "visible_from": "2026-06-01",
+        "visible_until": "2026-06-10",
+        "text": "Last Day of Grade Encoding 3rd Term AY25-26:\r\nJune 10, 2026",
+        "tags": [
+            "Advisory"
+        ],
+        "created_by": "dean",
+        "created_by_name": "SACE Dean",
+        "pinned": false,
+        "created_at": "2026-06-02T08:03:54+00:00",
+        "updated_at": "2026-06-02T08:03:54+00:00",
+        "attachment": null,
+        "tag": "Advisory"
+    }
+]

@@ -91,9 +91,24 @@ function notice_categories(): array
     ];
 }
 
-function notices_path(): string
+function notice_storage_root(): string
 {
-    return DATA_ROOT . '/notices.json';
+    return DATA_ROOT . '/notices';
+}
+
+function notice_storage_lock_path(): string
+{
+    return notice_storage_root() . '/storage.lock';
+}
+
+function board_notice_directory(string $boardId): string
+{
+    return notice_storage_root() . '/' . $boardId;
+}
+
+function board_notices_path(string $boardId): string
+{
+    return board_notice_directory($boardId) . '/notices.json';
 }
 
 function users_path(): string
@@ -101,9 +116,9 @@ function users_path(): string
     return DATA_ROOT . '/users.json';
 }
 
-function reactions_path(): string
+function board_reactions_path(string $boardId): string
 {
-    return DATA_ROOT . '/reactions.json';
+    return board_notice_directory($boardId) . '/reactions.json';
 }
 
 function attachment_public_path(string $filename): string
@@ -130,6 +145,30 @@ function ensure_attachment_root(): void
 
     if (!mkdir(ATTACHMENT_ROOT, 0775, true) && !is_dir(ATTACHMENT_ROOT)) {
         throw new RuntimeException('Unable to create the attachment storage directory.');
+    }
+}
+
+function ensure_notice_storage_root(): void
+{
+    $path = notice_storage_root();
+    if (is_dir($path)) {
+        return;
+    }
+
+    if (!mkdir($path, 0775, true) && !is_dir($path)) {
+        throw new RuntimeException('Unable to create the notice storage directory.');
+    }
+}
+
+function ensure_board_notice_directory(string $boardId): void
+{
+    $path = board_notice_directory($boardId);
+    if (is_dir($path)) {
+        return;
+    }
+
+    if (!mkdir($path, 0775, true) && !is_dir($path)) {
+        throw new RuntimeException('Unable to create the board notice storage directory.');
     }
 }
 
@@ -297,14 +336,75 @@ function write_json_file(string $path, array $payload): void
     file_put_contents($path, $encoded, LOCK_EX);
 }
 
-function all_users(): array
+function valid_board_id(string $boardId): bool
 {
-    return read_json_file_locked(users_path());
+    return isset(board_catalog()[$boardId]);
+}
+
+function partition_notices_by_board(array $notices): array
+{
+    $partitioned = [];
+
+    foreach ($notices as $notice) {
+        $boardId = (string) ($notice['board_id'] ?? '');
+        if (!valid_board_id($boardId)) {
+            continue;
+        }
+
+        $partitioned[$boardId][] = normalize_notice_record($notice);
+    }
+
+    return $partitioned;
+}
+
+function notices_for_board(string $boardId): array
+{
+    if (!valid_board_id($boardId)) {
+        return [];
+    }
+
+    $notices = read_json_file_locked(board_notices_path($boardId));
+
+    return array_map('normalize_notice_record', $notices);
+}
+
+function write_partitioned_notices(array $notices): void
+{
+    ensure_notice_storage_root();
+
+    $partitioned = partition_notices_by_board($notices);
+    foreach (board_catalog() as $boardId => $_board) {
+        ensure_board_notice_directory($boardId);
+        write_json_file(board_notices_path($boardId), $partitioned[$boardId] ?? []);
+    }
 }
 
 function all_reactions(): array
 {
-    return read_json_file_locked(reactions_path());
+    $reactions = [];
+    foreach (board_catalog() as $boardId => $_board) {
+        foreach (reactions_for_board($boardId) as $noticeId => $noticeReactions) {
+            $reactions[$noticeId] = is_array($noticeReactions) ? $noticeReactions : [];
+        }
+    }
+
+    return $reactions;
+}
+
+function reactions_for_board(string $boardId): array
+{
+    if (!valid_board_id($boardId)) {
+        return [];
+    }
+
+    $reactions = read_json_file_locked(board_reactions_path($boardId));
+
+    return is_array($reactions) ? $reactions : [];
+}
+
+function all_users(): array
+{
+    return read_json_file_locked(users_path());
 }
 
 function mutate_users(callable $mutator): array
@@ -347,9 +447,16 @@ function mutate_users(callable $mutator): array
     }
 }
 
-function mutate_reactions(callable $mutator): array
+function mutate_reactions(string $boardId, callable $mutator): array
 {
-    $path = reactions_path();
+    if (!valid_board_id($boardId)) {
+        throw new RuntimeException('Invalid board selected for reactions.');
+    }
+
+    ensure_notice_storage_root();
+    ensure_board_notice_directory($boardId);
+
+    $path = board_reactions_path($boardId);
     $handle = fopen($path, 'c+');
     if ($handle === false) {
         throw new RuntimeException('Unable to open reaction storage.');
@@ -424,7 +531,18 @@ function reaction_types(): array
     return ['like', 'heart'];
 }
 
-function reaction_summary_for_notice(string $noticeId, ?string $clientId = null): array
+function board_id_for_notice_id(string $noticeId): ?string
+{
+    $notice = find_notice_by_id(all_notices(), $noticeId);
+    if ($notice === null) {
+        return null;
+    }
+
+    $boardId = (string) ($notice['board_id'] ?? '');
+    return valid_board_id($boardId) ? $boardId : null;
+}
+
+function reaction_summary_for_notice(string $noticeId, ?string $clientId = null, ?string $boardId = null): array
 {
     $summary = [
         'like' => ['count' => 0, 'reacted' => false],
@@ -432,7 +550,12 @@ function reaction_summary_for_notice(string $noticeId, ?string $clientId = null)
     ];
 
     $clientId = $clientId !== null ? normalize_client_id($clientId) : null;
-    $all = all_reactions();
+    $resolvedBoardId = $boardId !== null ? $boardId : board_id_for_notice_id($noticeId);
+    if ($resolvedBoardId === null) {
+        return $summary;
+    }
+
+    $all = reactions_for_board($resolvedBoardId);
     $noticeReactions = $all[$noticeId] ?? [];
 
     foreach (reaction_types() as $type) {
@@ -464,7 +587,12 @@ function toggle_notice_reaction(string $noticeId, string $reactionType, string $
         throw new RuntimeException('Invalid reaction type.');
     }
 
-    mutate_reactions(static function (array $reactions) use ($noticeId, $reactionType, $clientId): array {
+    $boardId = board_id_for_notice_id($noticeId);
+    if ($boardId === null) {
+        throw new RuntimeException('Notice not found.');
+    }
+
+    mutate_reactions($boardId, static function (array $reactions) use ($noticeId, $reactionType, $clientId): array {
         $noticeReactions = $reactions[$noticeId] ?? [];
         $clients = $noticeReactions[$reactionType] ?? [];
         if (!is_array($clients)) {
@@ -489,19 +617,25 @@ function toggle_notice_reaction(string $noticeId, string $reactionType, string $
         return $reactions;
     });
 
-    return reaction_summary_for_notice($noticeId, $clientId);
+    return reaction_summary_for_notice($noticeId, $clientId, $boardId);
 }
 
 function all_notices(): array
 {
-    $notices = read_json_file_locked(notices_path());
+    $notices = [];
+    foreach (board_catalog() as $boardId => $_board) {
+        foreach (notices_for_board($boardId) as $notice) {
+            $notices[] = $notice;
+        }
+    }
 
-    return array_map('normalize_notice_record', $notices);
+    return $notices;
 }
 
 function mutate_notices(callable $mutator): array
 {
-    $path = notices_path();
+    ensure_notice_storage_root();
+    $path = notice_storage_lock_path();
     $handle = fopen($path, 'c+');
     if ($handle === false) {
         throw new RuntimeException('Unable to open notice storage.');
@@ -512,25 +646,14 @@ function mutate_notices(callable $mutator): array
             throw new RuntimeException('Unable to acquire write lock.');
         }
 
-        rewind($handle);
-        $content = stream_get_contents($handle);
-        $decoded = ($content === false || $content === '') ? [] : json_decode($content, true);
-        $notices = is_array($decoded) ? array_map('normalize_notice_record', $decoded) : [];
+        $notices = all_notices();
 
         $updatedNotices = $mutator($notices);
         if (!is_array($updatedNotices)) {
             throw new RuntimeException('Notice mutation failed.');
         }
 
-        $encoded = json_encode($updatedNotices, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
-        if ($encoded === false) {
-            throw new RuntimeException('Unable to encode notice storage.');
-        }
-
-        ftruncate($handle, 0);
-        rewind($handle);
-        fwrite($handle, $encoded);
-        fflush($handle);
+        write_partitioned_notices($updatedNotices);
         flock($handle, LOCK_UN);
 
         return array_map('normalize_notice_record', $updatedNotices);
@@ -742,17 +865,20 @@ function sort_notices(array &$notices): void
     );
 }
 
-function group_boards_for_public(?string $clientId = null): array
+function board_for_public(string $boardId, ?string $clientId = null): ?array
 {
     $catalog = board_catalog();
-    $notices = all_notices();
+    if (!isset($catalog[$boardId])) {
+        return null;
+    }
+
+    $notices = notices_for_board($boardId);
     $today = today_ymd();
 
     sort_notices($notices);
 
-    foreach ($catalog as $boardId => $board) {
-        $catalog[$boardId]['notices'] = [];
-    }
+    $board = $catalog[$boardId];
+    $board['notices'] = [];
 
     foreach ($notices as $notice) {
         $isActive = is_notice_visible($notice, $today);
@@ -762,12 +888,7 @@ function group_boards_for_public(?string $clientId = null): array
             continue;
         }
 
-        $boardId = $notice['board_id'] ?? '';
-        if (!isset($catalog[$boardId])) {
-            continue;
-        }
-
-        $catalog[$boardId]['notices'][] = [
+        $board['notices'][] = [
             'id' => $notice['id'],
             'category' => $notice['category'],
             'audience' => $notice['audience'],
@@ -782,12 +903,23 @@ function group_boards_for_public(?string $clientId = null): array
             'visible_from' => (string) ($notice['visible_from'] ?? ''),
             'visible_until' => (string) ($notice['visible_until'] ?? ''),
             'attachment' => $notice['attachment'],
-            'reactions' => reaction_summary_for_notice((string) $notice['id'], $clientId),
+            'reactions' => reaction_summary_for_notice((string) $notice['id'], $clientId, $boardId),
             'scope_status' => notice_scope_status($notice, $today),
         ];
     }
 
-    return array_values($catalog);
+    return $board;
+}
+
+function group_boards_for_public(?string $clientId = null): array
+{
+    return array_values(array_map(
+        static function (array $board): array {
+            $board['notices'] = [];
+            return $board;
+        },
+        board_catalog()
+    ));
 }
 
 function priority_notices_for_public(?string $clientId = null): array
@@ -823,7 +955,7 @@ function priority_notices_for_public(?string $clientId = null): array
                 'pinned' => (bool) ($notice['pinned'] ?? false),
                 'updated_at' => (string) ($notice['updated_at'] ?? ''),
                 'attachment' => $notice['attachment'],
-                'reactions' => reaction_summary_for_notice((string) $notice['id'], $clientId),
+                'reactions' => reaction_summary_for_notice((string) $notice['id'], $clientId, $boardId),
             ];
         },
         $priority
