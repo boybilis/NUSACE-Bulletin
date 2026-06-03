@@ -465,6 +465,8 @@ main {
 
 .notice-card {
   position: relative;
+  display: flex;
+  flex-direction: column;
   padding: 18px;
   background: rgba(255, 255, 255, 0.97);
   border: 1px solid rgba(0, 58, 112, 0.1);
@@ -521,9 +523,13 @@ main {
 }
 
 .notice-card footer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
   justify-content: space-between;
   align-items: center;
-  margin-top: 16px;
+  margin-top: auto;
+  padding-top: 16px;
   font-size: 0.88rem;
 }
 
