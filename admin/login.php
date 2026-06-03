@@ -66,7 +66,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
       <div class="admin-login-help">
         <p><strong>Default accounts</strong></p>
-        <p>The Dean account uses the `dean` username. Program chair usernames follow `chair.architecture`, `chair.computer-science`, `chair.information-technology`, `chair.engineering`, `chair.mma`, and `chair.cpe`.</p>
+        <p>If you forgot your login credentials, please contact your dean to reset your login credentials.</p>
       </div>
     </section>
   </main>

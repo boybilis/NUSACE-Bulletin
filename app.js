@@ -33,6 +33,7 @@ const appBottomLinks = [...document.querySelectorAll(".app-bottom-link[data-nav-
 const CLIENT_ID_KEY = "nusaceBulletinClientId";
 const API_VERSION = "20260602-admin20";
 const MAX_NOTICE_PREVIEW_WORDS = 40;
+const APP_VIEW_KEY = "nusaceBulletinAppView";
 
 let deferredPrompt;
 let boards = [];
@@ -672,6 +673,37 @@ function setActiveBottomNav(sectionId) {
   });
 }
 
+function persistAppView(view) {
+  try {
+    if (view === "home") {
+      window.sessionStorage.removeItem(APP_VIEW_KEY);
+      window.history.replaceState(null, "", window.location.pathname + window.location.search);
+      return;
+    }
+
+    window.sessionStorage.setItem(APP_VIEW_KEY, view);
+    window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}#${view}`);
+  } catch (error) {
+  }
+}
+
+function initialAppView() {
+  const hashView = window.location.hash.replace(/^#/, "");
+  if (["boards", "highlights", "feedback"].includes(hashView)) {
+    return hashView;
+  }
+
+  try {
+    const storedView = window.sessionStorage.getItem(APP_VIEW_KEY) || "";
+    if (["boards", "highlights", "feedback"].includes(storedView)) {
+      return storedView;
+    }
+  } catch (error) {
+  }
+
+  return "home";
+}
+
 function initializeBottomNav() {
   if (appViewLinks.length === 0) {
     return;
@@ -690,7 +722,8 @@ function initializeBottomNav() {
   });
 }
 
-function showAppView(view) {
+function showAppView(view, options = {}) {
+  const { scroll = true, persist = true } = options;
   currentAppView = view;
 
   const isHome = view === "home";
@@ -701,16 +734,24 @@ function showAppView(view) {
     section.classList.toggle("app-view-hidden", isHome || section.id !== view);
   });
 
+  if (persist) {
+    persistAppView(view);
+  }
+
   if (isHome) {
     setActiveBottomNav("");
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    if (scroll) {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
     return;
   }
 
   setActiveBottomNav(view);
-  requestAnimationFrame(() => {
-    window.scrollTo({ top: 0, behavior: "smooth" });
-  });
+  if (scroll) {
+    requestAnimationFrame(() => {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    });
+  }
 }
 
 function buildNoticeCard(notice, boardName = "") {
@@ -1089,6 +1130,5 @@ if ("serviceWorker" in navigator) {
 
 initializeNoticeCardCollapseHandlers();
 initializeBottomNav();
-window.history.replaceState(null, "", window.location.pathname + window.location.search);
-showAppView("home");
+showAppView(initialAppView(), { scroll: false, persist: false });
 loadBoards();
