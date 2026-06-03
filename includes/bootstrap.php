@@ -13,6 +13,8 @@ const APP_ROOT = __DIR__ . '/..';
 const DATA_ROOT = APP_ROOT . '/data';
 const ATTACHMENT_ROOT = APP_ROOT . '/uploads/attachments';
 const MAX_ATTACHMENT_BYTES = 10485760;
+const PUBLISHED_CALENDAR_HTML_URL = 'https://outlook.office365.com/owa/calendar/2c19d868a4d34204863b68a58eaf736b@nu-lipa.edu.ph/f15f9b81b2db4fa78ac383d6519ad28d12429557842574329440/calendar.html';
+const PUBLISHED_CALENDAR_ICS_URL = 'https://outlook.office365.com/owa/calendar/2c19d868a4d34204863b68a58eaf736b@nu-lipa.edu.ph/f15f9b81b2db4fa78ac383d6519ad28d12429557842574329440/calendar.ics';
 
 function board_catalog(): array
 {
@@ -99,6 +101,16 @@ function notice_categories(): array
 function notice_storage_root(): string
 {
     return DATA_ROOT . '/notices';
+}
+
+function published_calendar_html_url(): string
+{
+    return PUBLISHED_CALENDAR_HTML_URL;
+}
+
+function published_calendar_ics_url(): string
+{
+    return PUBLISHED_CALENDAR_ICS_URL;
 }
 
 function notice_storage_lock_path(): string

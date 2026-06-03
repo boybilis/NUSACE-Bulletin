@@ -25,6 +25,11 @@ const feedbackVerifyButton = document.getElementById("feedbackVerifyButton");
 const feedbackResetButton = document.getElementById("feedbackResetButton");
 const feedbackSuccess = document.getElementById("feedbackSuccess");
 const feedbackError = document.getElementById("feedbackError");
+const calendarList = document.getElementById("calendarList");
+const calendarStatus = document.getElementById("calendarStatus");
+const calendarOpenLink = document.getElementById("calendarOpenLink");
+const calendarSubscribeLink = document.getElementById("calendarSubscribeLink");
+const calendarMonthSelect = document.getElementById("calendarMonthSelect");
 const appHomeButton = document.getElementById("appHomeButton");
 const homeHero = document.getElementById("homeHero");
 const appSections = [...document.querySelectorAll("[data-app-section]")];
@@ -46,6 +51,8 @@ let activeBoardId = "sace";
 let feedbackOtpExpiresAt = null;
 let feedbackOtpTimer = null;
 let currentAppView = "home";
+let calendarEventsLoaded = false;
+let activeCalendarMonth = "";
 const expandedNoticeCards = new Set();
 const clientId = getClientId();
 
@@ -673,6 +680,144 @@ function setActiveBottomNav(sectionId) {
   });
 }
 
+function formatCalendarDate(dateValue) {
+  return new Intl.DateTimeFormat("en-PH", {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    year: "numeric"
+  }).format(dateValue);
+}
+
+function formatCalendarTime(dateValue) {
+  return new Intl.DateTimeFormat("en-PH", {
+    hour: "numeric",
+    minute: "2-digit"
+  }).format(dateValue);
+}
+
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+}
+
+function renderCalendarEvents(events) {
+  if (!calendarList || !calendarStatus) {
+    return;
+  }
+
+  if (!Array.isArray(events) || events.length === 0) {
+    calendarStatus.textContent = "No published calendar events are available right now.";
+    calendarList.innerHTML = "";
+    return;
+  }
+
+  calendarStatus.textContent = `${events.length} published calendar event${events.length === 1 ? "" : "s"} loaded.`;
+  calendarList.innerHTML = events.map((event) => {
+    const startsAt = new Date(event.starts_at);
+    const endsAt = event.ends_at ? new Date(event.ends_at) : null;
+    const hasEnd = endsAt instanceof Date && !Number.isNaN(endsAt.valueOf());
+    const sameDay = hasEnd ? startsAt.toDateString() === endsAt.toDateString() : true;
+    const dateLine = event.is_all_day
+      ? `${formatCalendarDate(startsAt)} · All day`
+      : hasEnd && sameDay
+        ? `${formatCalendarDate(startsAt)} · ${formatCalendarTime(startsAt)} - ${formatCalendarTime(endsAt)}`
+        : `${formatCalendarDate(startsAt)} · ${formatCalendarTime(startsAt)}`;
+    const endLine = !event.is_all_day && hasEnd && !sameDay
+      ? `<p class="calendar-event-meta">Ends ${escapeHtml(formatCalendarDate(endsAt))} · ${escapeHtml(formatCalendarTime(endsAt))}</p>`
+      : "";
+    const location = event.location
+      ? `<p class="calendar-event-meta">Location: ${escapeHtml(event.location)}</p>`
+      : "";
+    const description = event.description
+      ? `<p class="calendar-event-description">${escapeHtml(event.description)}</p>`
+      : "";
+    const openLink = event.url
+      ? `<a class="calendar-event-link" href="${escapeHtml(event.url)}" target="_blank" rel="noopener">Open event link</a>`
+      : "";
+
+    return `
+      <article class="calendar-event-card">
+        <div class="calendar-event-date">${escapeHtml(formatCalendarDate(startsAt))}</div>
+        <div class="calendar-event-body">
+          <p class="eyebrow">Published Calendar Event</p>
+          <h3>${escapeHtml(event.title || "Untitled event")}</h3>
+          <p class="calendar-event-meta">${escapeHtml(dateLine)}</p>
+          ${endLine}
+          ${location}
+          ${description}
+          ${openLink}
+        </div>
+      </article>
+    `;
+  }).join("");
+}
+
+function renderCalendarMonthOptions(months, selectedMonth) {
+  if (!calendarMonthSelect) {
+    return;
+  }
+
+  if (!Array.isArray(months) || months.length === 0) {
+    calendarMonthSelect.innerHTML = '<option value="">No months available</option>';
+    calendarMonthSelect.disabled = true;
+    return;
+  }
+
+  calendarMonthSelect.disabled = false;
+  calendarMonthSelect.innerHTML = months.map((month) => `
+    <option value="${escapeHtml(month.value || "")}"${month.value === selectedMonth ? " selected" : ""}>${escapeHtml(month.label || month.value || "")}</option>
+  `).join("");
+}
+
+async function loadCalendarEvents(force = false, month = activeCalendarMonth) {
+  if (!calendarList || !calendarStatus) {
+    return;
+  }
+
+  if (calendarEventsLoaded && !force && month === activeCalendarMonth) {
+    return;
+  }
+
+  calendarStatus.textContent = "Loading calendar events...";
+
+  try {
+    const query = month ? `?month=${encodeURIComponent(month)}` : "";
+    const response = await fetch(`api/calendar.php${query}`, {
+      headers: {
+        "Accept": "application/json"
+      }
+    });
+    const payload = await response.json();
+
+    if (calendarOpenLink && payload.calendarHtmlUrl) {
+      calendarOpenLink.href = payload.calendarHtmlUrl;
+    }
+
+    if (calendarSubscribeLink && payload.calendarIcsUrl) {
+      calendarSubscribeLink.href = payload.calendarIcsUrl;
+    }
+
+    if (!response.ok) {
+      throw new Error(payload.error || "Unable to load the published calendar.");
+    }
+
+    activeCalendarMonth = payload.selectedMonth || month || "";
+    renderCalendarMonthOptions(payload.availableMonths || [], activeCalendarMonth);
+    renderCalendarEvents(payload.events || []);
+    calendarEventsLoaded = true;
+  } catch (error) {
+    calendarStatus.textContent = error instanceof Error
+      ? error.message
+      : "Unable to load the published calendar.";
+    calendarList.innerHTML = "";
+  }
+}
+
 function persistAppView(view) {
   try {
     if (view === "home") {
@@ -689,13 +834,13 @@ function persistAppView(view) {
 
 function initialAppView() {
   const hashView = window.location.hash.replace(/^#/, "");
-  if (["boards", "highlights", "feedback"].includes(hashView)) {
+  if (["boards", "highlights", "calendar", "feedback"].includes(hashView)) {
     return hashView;
   }
 
   try {
     const storedView = window.sessionStorage.getItem(APP_VIEW_KEY) || "";
-    if (["boards", "highlights", "feedback"].includes(storedView)) {
+    if (["boards", "highlights", "calendar", "feedback"].includes(storedView)) {
       return storedView;
     }
   } catch (error) {
@@ -747,6 +892,9 @@ function showAppView(view, options = {}) {
   }
 
   setActiveBottomNav(view);
+  if (view === "calendar") {
+    loadCalendarEvents();
+  }
   if (scroll) {
     requestAnimationFrame(() => {
       window.scrollTo({ top: 0, behavior: "smooth" });
@@ -1065,6 +1213,15 @@ feedbackVerifyButton?.addEventListener("click", async () => {
 
 feedbackResetButton?.addEventListener("click", () => {
   resetFeedbackForm();
+});
+
+calendarMonthSelect?.addEventListener("change", () => {
+  const nextMonth = calendarMonthSelect.value || "";
+  if (nextMonth === activeCalendarMonth && calendarEventsLoaded) {
+    return;
+  }
+
+  loadCalendarEvents(true, nextMonth);
 });
 
 attachmentModalClose?.addEventListener("click", closeAttachmentModal);

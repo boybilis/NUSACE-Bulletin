@@ -6,3 +6,4 @@ data/notices/*/reactions.json
 data/notices/*/feedback.json
 data/notices/*/feedback-pending.json
 includes/mailer-config.local.php
+_backups

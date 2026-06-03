@@ -16,7 +16,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Fraunces:opsz,wght@9..144,600;9..144,700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="styles.css?v=20260602-admin19" />
+  <link rel="stylesheet" href="styles.css?v=20260603-calendar1" />
   <title>NU Lipa SACE Bulletin Board</title>
 </head>
 <body>
@@ -52,6 +52,7 @@
           <div class="hero-actions">
             <a href="#boards" class="primary-link" data-app-view="boards">Open Bulletin Boards</a>
             <a href="#highlights" class="secondary-link" data-app-view="highlights">View Priority Notices</a>
+			<a href="#calendar" class="secondary-link" data-app-view="calendar">View Calendar</a>
 			<a href="#feedback" class="secondary-link" data-app-view="feedback">Send Feedbacks</a>
             <a href="admin/login.php" class="secondary-link">Admin Login</a>
           </div>
@@ -81,6 +82,33 @@
           <h2>Official announcements that faculty and students need to see first</h2>
         </div>
         <div class="highlight-strip" id="highlightStrip"></div>
+      </section>
+
+      <section class="calendar-section" id="calendar" data-app-section="calendar">
+        <div class="section-heading">
+          <p class="eyebrow">School Calendar</p>
+          <h2>Published calendar events from the NULIPA-SACE Outlook calendar</h2>
+        </div>
+
+        <div class="calendar-shell glass-panel">
+          <div class="calendar-copy">
+            <p class="lead">View upcoming school-wide schedule entries directly inside the site. Use the browser link for the full Outlook calendar view or the ICS link to subscribe in another calendar app.</p>
+          </div>
+          <div class="calendar-toolbar">
+            <label class="calendar-filter" for="calendarMonthSelect">
+              <span class="tag-filter-label">Month</span>
+              <select id="calendarMonthSelect" aria-label="Select calendar month">
+                <option value="">Loading months...</option>
+              </select>
+            </label>
+          </div>
+          <div class="calendar-actions">
+            <a class="primary-link" id="calendarOpenLink" href="https://outlook.office365.com/owa/calendar/2c19d868a4d34204863b68a58eaf736b@nu-lipa.edu.ph/f15f9b81b2db4fa78ac383d6519ad28d12429557842574329440/calendar.html" target="_blank" rel="noopener">Open Full Calendar</a>
+            <a class="secondary-link" id="calendarSubscribeLink" href="https://outlook.office365.com/owa/calendar/2c19d868a4d34204863b68a58eaf736b@nu-lipa.edu.ph/f15f9b81b2db4fa78ac383d6519ad28d12429557842574329440/calendar.ics" target="_blank" rel="noopener">Subscribe via ICS</a>
+          </div>
+          <div class="calendar-status" id="calendarStatus">Loading calendar events...</div>
+          <div class="calendar-list" id="calendarList"></div>
+        </div>
       </section>
 
       <section class="board-section" id="boards" data-app-section="boards">
@@ -181,6 +209,10 @@
       <span class="app-bottom-icon" aria-hidden="true">★</span>
       <span class="app-bottom-label">Priority</span>
     </a>
+    <a href="#calendar" class="app-bottom-link" data-nav-section="calendar" data-app-view="calendar">
+      <span class="app-bottom-icon" aria-hidden="true">🗓</span>
+      <span class="app-bottom-label">Calendar</span>
+    </a>
     <a href="#feedback" class="app-bottom-link" data-nav-section="feedback" data-app-view="feedback">
       <span class="app-bottom-icon" aria-hidden="true">✉</span>
       <span class="app-bottom-label">Feedbacks</span>
@@ -239,6 +271,6 @@
     </div>
   </div>
 
-  <script src="app.js?v=20260603-feedback1"></script>
+  <script src="app.js?v=20260603-calendar1"></script>
 </body>
 </html>
