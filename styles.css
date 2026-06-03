@@ -31,6 +31,7 @@ body {
     radial-gradient(circle at top left, rgba(242, 194, 77, 0.24), transparent 28%),
     radial-gradient(circle at top right, rgba(0, 58, 112, 0.12), transparent 24%),
     linear-gradient(180deg, #fffdf6 0%, #edf4fb 100%);
+  padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px));
 }
 
 body.modal-open {
@@ -258,6 +259,71 @@ main {
   display: grid;
   gap: 32px;
   padding-bottom: 40px;
+}
+
+.app-bottom-nav {
+  position: fixed;
+  left: 50%;
+  bottom: 0;
+  z-index: 1100;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  width: min(100%, 760px);
+  padding: 8px 14px calc(8px + env(safe-area-inset-bottom, 0px));
+  transform: translateX(-50%);
+  background: rgba(255, 255, 255, 0.84);
+  border-top: 0;
+  box-shadow: 0 -14px 32px rgba(0, 58, 112, 0.12);
+  backdrop-filter: blur(20px);
+  overflow: hidden;
+}
+
+.app-bottom-nav::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: linear-gradient(90deg, var(--navy) 0 50%, var(--gold) 50% 100%);
+}
+
+.app-bottom-link {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 6px 10px;
+  border-radius: 18px;
+  color: rgba(16, 35, 59, 0.74);
+  text-decoration: none;
+  text-align: center;
+  transition: background 180ms ease, color 180ms ease, transform 180ms ease, border-color 180ms ease;
+  border: 1px solid rgba(242, 194, 77, 0.42);
+}
+
+.app-bottom-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 20px;
+  margin-bottom: 2px;
+  font-size: 1.2rem;
+  line-height: 1;
+}
+
+.app-bottom-link.is-active {
+  background: linear-gradient(135deg, var(--navy), var(--navy-deep));
+  color: var(--gold);
+  border-color: rgba(242, 194, 77, 0.72);
+}
+
+.app-bottom-label {
+  font-size: 0.68rem;
+  font-weight: 700;
+  line-height: 1.05;
 }
 
 .highlights,
@@ -1046,6 +1112,21 @@ main {
   .board-overview,
   .hero-copy {
     padding: 18px;
+  }
+
+  .app-bottom-nav {
+    width: 100%;
+    gap: 6px;
+    padding-inline: 10px;
+  }
+
+  .app-bottom-link {
+    min-height: 42px;
+    padding: 6px 6px;
+  }
+
+  .app-bottom-label {
+    font-size: 0.64rem;
   }
 
   .brand-lockup {

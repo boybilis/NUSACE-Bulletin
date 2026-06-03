@@ -25,6 +25,7 @@ const feedbackVerifyButton = document.getElementById("feedbackVerifyButton");
 const feedbackResetButton = document.getElementById("feedbackResetButton");
 const feedbackSuccess = document.getElementById("feedbackSuccess");
 const feedbackError = document.getElementById("feedbackError");
+const appBottomLinks = [...document.querySelectorAll(".app-bottom-link[data-nav-section]")];
 const CLIENT_ID_KEY = "nusaceBulletinClientId";
 const API_VERSION = "20260602-admin20";
 const MAX_NOTICE_PREVIEW_WORDS = 40;
@@ -660,6 +661,46 @@ function initializeNoticeCardCollapseHandlers() {
   }, { passive: true });
 }
 
+function setActiveBottomNav(sectionId) {
+  appBottomLinks.forEach((link) => {
+    link.classList.toggle("is-active", link.dataset.navSection === sectionId);
+  });
+}
+
+function initializeBottomNav() {
+  if (appBottomLinks.length === 0) {
+    return;
+  }
+
+  const sections = ["highlights", "boards", "feedback"]
+    .map((id) => document.getElementById(id))
+    .filter(Boolean);
+
+  appBottomLinks.forEach((link) => {
+    link.addEventListener("click", () => {
+      if (link.dataset.navSection) {
+        setActiveBottomNav(link.dataset.navSection);
+      }
+    });
+  });
+
+  const observer = new IntersectionObserver((entries) => {
+    const visible = entries
+      .filter((entry) => entry.isIntersecting)
+      .sort((left, right) => right.intersectionRatio - left.intersectionRatio)[0];
+
+    if (visible?.target?.id) {
+      setActiveBottomNav(visible.target.id);
+    }
+  }, {
+    rootMargin: "-20% 0px -45% 0px",
+    threshold: [0.2, 0.4, 0.6]
+  });
+
+  sections.forEach((section) => observer.observe(section));
+  setActiveBottomNav("boards");
+}
+
 function buildNoticeCard(notice, boardName = "") {
   const clone = noticeTemplate.content.cloneNode(true);
   const card = clone.querySelector(".notice-card");
@@ -1030,4 +1071,5 @@ if ("serviceWorker" in navigator) {
 }
 
 initializeNoticeCardCollapseHandlers();
+initializeBottomNav();
 loadBoards();
