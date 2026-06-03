@@ -482,6 +482,7 @@ main {
   position: relative;
   display: flex;
   flex-direction: column;
+  height: 100%;
   padding: 18px;
   background: rgba(255, 255, 255, 0.97);
   border: 1px solid rgba(0, 58, 112, 0.1);
@@ -521,6 +522,30 @@ main {
 .notice-text {
   margin-top: 12px;
   white-space: pre-line;
+}
+
+.notice-text-block {
+  display: grid;
+  gap: 8px;
+}
+
+.notice-text.is-clamped {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 5;
+  overflow: hidden;
+}
+
+.notice-read-more {
+  width: fit-content;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--navy);
+  font: inherit;
+  font-weight: 700;
+  text-decoration: underline;
+  cursor: pointer;
 }
 
 .notice-meta {

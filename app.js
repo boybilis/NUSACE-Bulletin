@@ -27,6 +27,7 @@ const feedbackSuccess = document.getElementById("feedbackSuccess");
 const feedbackError = document.getElementById("feedbackError");
 const CLIENT_ID_KEY = "nusaceBulletinClientId";
 const API_VERSION = "20260602-admin20";
+const MAX_NOTICE_PREVIEW_WORDS = 60;
 
 let deferredPrompt;
 let boards = [];
@@ -38,6 +39,7 @@ let hasReloadedForUpdate = false;
 let activeBoardId = "sace";
 let feedbackOtpExpiresAt = null;
 let feedbackOtpTimer = null;
+const expandedNoticeCards = new Set();
 const clientId = getClientId();
 
 function compareNotices(left, right) {
@@ -196,7 +198,10 @@ function renderHighlights() {
           <span class="eyebrow">${escapeHtml(item.board_name || item.board || "")}</span>
           <h3>${escapeHtml(item.title)}</h3>
           <hr class="notice-divider">
-          <p>${escapeHtml(item.text)}</p>
+          <div class="notice-text-block">
+            <p class="notice-text">${escapeHtml(item.text)}</p>
+            <button type="button" class="notice-read-more" hidden>Read more</button>
+          </div>
           <div class="highlight-card-footer">
             ${item.attachment && item.attachment.path ? `<div class="notice-attachment"><button type="button" class="attachment-link" data-attachment='${escapeHtml(JSON.stringify(item.attachment))}'>Attachment: ${escapeHtml(item.attachment.name || "View file")}</button></div>` : ""}
             <p class="notice-date">${item.pinned ? "Pinned" : `Visible ${escapeHtml(formatDate(item.visible_from || item.date))}`}</p>
@@ -214,6 +219,13 @@ function renderHighlights() {
       } catch (error) {
       }
     });
+  });
+
+  highlightStrip.querySelectorAll(".highlight-card").forEach((card, index) => {
+    const textNode = card.querySelector(".notice-text");
+    const toggleButton = card.querySelector(".notice-read-more");
+    const fullText = featured[index]?.text || "";
+    setupNoticeReadMore(card, textNode, toggleButton, fullText);
   });
 }
 
@@ -530,15 +542,111 @@ function closeAttachmentModal() {
   document.body.classList.remove("modal-open");
 }
 
+function noticePreviewText(value, maxWords = MAX_NOTICE_PREVIEW_WORDS) {
+  const words = String(value || "").trim().split(/\s+/).filter(Boolean);
+  if (words.length <= maxWords) {
+    return { text: String(value || ""), truncated: false };
+  }
+
+  return {
+    text: `${words.slice(0, maxWords).join(" ")}...`,
+    truncated: true
+  };
+}
+
+function collapseNoticeCard(card) {
+  if (!(card instanceof HTMLElement)) {
+    return;
+  }
+
+  const textNode = card.querySelector(".notice-text");
+  const toggleButton = card.querySelector(".notice-read-more");
+  const fullText = card.dataset.fullText || "";
+  const preview = noticePreviewText(fullText);
+
+  if (!(textNode instanceof HTMLElement) || !(toggleButton instanceof HTMLButtonElement)) {
+    return;
+  }
+
+  textNode.textContent = preview.text;
+  card.classList.remove("is-expanded");
+  toggleButton.textContent = "Read more";
+  toggleButton.hidden = !preview.truncated;
+  expandedNoticeCards.delete(card);
+}
+
+function collapseExpandedNoticeCards(exceptCard = null) {
+  [...expandedNoticeCards].forEach((card) => {
+    if (card !== exceptCard) {
+      collapseNoticeCard(card);
+    }
+  });
+}
+
+function setupNoticeReadMore(card, textNode, toggleButton, fullText) {
+  if (!(card instanceof HTMLElement) || !(textNode instanceof HTMLElement) || !(toggleButton instanceof HTMLButtonElement)) {
+    return;
+  }
+
+  card.dataset.fullText = fullText;
+  const preview = noticePreviewText(fullText);
+  textNode.textContent = preview.text;
+  toggleButton.hidden = !preview.truncated;
+
+  if (!preview.truncated) {
+    return;
+  }
+
+  toggleButton.addEventListener("click", (event) => {
+    event.preventDefault();
+    const expanded = card.classList.toggle("is-expanded");
+
+    if (expanded) {
+      collapseExpandedNoticeCards(card);
+      textNode.textContent = fullText;
+      toggleButton.textContent = "Show less";
+      expandedNoticeCards.add(card);
+      return;
+    }
+
+    collapseNoticeCard(card);
+  });
+}
+
+function initializeNoticeCardCollapseHandlers() {
+  document.addEventListener("click", (event) => {
+    const target = event.target;
+    if (!(target instanceof HTMLElement)) {
+      return;
+    }
+
+    const activeCard = target.closest(".notice-card, .highlight-card");
+    collapseExpandedNoticeCards(activeCard);
+  });
+
+  window.addEventListener("scroll", () => {
+    [...expandedNoticeCards].forEach((card) => {
+      const rect = card.getBoundingClientRect();
+      const isVisible = rect.bottom > 40 && rect.top < window.innerHeight - 40;
+      if (!isVisible) {
+        collapseNoticeCard(card);
+      }
+    });
+  }, { passive: true });
+}
+
 function buildNoticeCard(notice, boardName = "") {
   const clone = noticeTemplate.content.cloneNode(true);
+  const card = clone.querySelector(".notice-card");
   const newIndicator = clone.querySelector(".notice-new-indicator");
+  const noticeText = clone.querySelector(".notice-text");
+  const readMoreButton = clone.querySelector(".notice-read-more");
   clone.querySelector(".category-pill").textContent = notice.category;
   clone.querySelector(".audience-pill").textContent = boardName ? `${notice.audience} - ${boardName}` : notice.audience;
   clone.querySelector("h3").textContent = notice.title;
   clone.querySelector(".notice-date").textContent = formatDate(notice.date);
-  clone.querySelector(".notice-text").textContent = notice.text;
   clone.querySelector(".notice-cta").textContent = noticeStatusLabel(notice);
+  setupNoticeReadMore(card, noticeText, readMoreButton, notice.text);
 
   if (isNewNotice(notice)) {
     newIndicator.hidden = false;
@@ -896,4 +1004,5 @@ if ("serviceWorker" in navigator) {
   });
 }
 
+initializeNoticeCardCollapseHandlers();
 loadBoards();
