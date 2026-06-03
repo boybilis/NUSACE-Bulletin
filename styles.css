@@ -97,7 +97,12 @@ body::before {
   text-transform: uppercase;
   letter-spacing: 0.18em;
   font-size: 0.76rem;
-  color: var(--navy);
+  font-weight: 700;
+  color: #9b6a00;
+}
+
+.board-overview .eyebrow {
+  color: #f2c24d;
 }
 
 .topbar h1 {
@@ -562,7 +567,8 @@ main {
 
 .reaction-btn.is-active {
   background: rgba(0, 58, 112, 0.1);
-  border-color: rgba(0, 58, 112, 0.24);
+  color: #f2c24d;
+  border-color: rgba(242, 194, 77, 0.72);
 }
 
 .reaction-btn:disabled {
