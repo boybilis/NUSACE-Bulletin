@@ -608,6 +608,7 @@ main {
   display: grid;
   gap: 18px;
   padding: 24px;
+  border-radius: var(--radius-md);
 }
 
 .feedback-copy {
