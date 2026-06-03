@@ -181,8 +181,9 @@ body::before {
 
 .install-btn,
 .primary-link {
-  color: #fff;
+  color: #f2c24d;
   background: linear-gradient(135deg, var(--navy), var(--navy-deep));
+  border: 1px solid rgba(242, 194, 77, 0.72);
   box-shadow: 0 12px 24px rgba(0, 58, 112, 0.24);
 }
 
