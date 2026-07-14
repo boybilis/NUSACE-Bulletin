@@ -4,6 +4,11 @@ declare(strict_types=1);
 
 session_start();
 
+$dbConfigOverride = __DIR__ . '/db-config.local.php';
+if (is_file($dbConfigOverride)) {
+    require_once $dbConfigOverride;
+}
+
 $mailerConfigOverride = __DIR__ . '/mailer-config.local.php';
 if (is_file($mailerConfigOverride)) {
     require_once $mailerConfigOverride;
@@ -98,11 +103,6 @@ function notice_categories(): array
     ];
 }
 
-function notice_storage_root(): string
-{
-    return DATA_ROOT . '/notices';
-}
-
 function published_calendar_html_url(): string
 {
     return PUBLISHED_CALENDAR_HTML_URL;
@@ -111,41 +111,6 @@ function published_calendar_html_url(): string
 function published_calendar_ics_url(): string
 {
     return PUBLISHED_CALENDAR_ICS_URL;
-}
-
-function notice_storage_lock_path(): string
-{
-    return notice_storage_root() . '/storage.lock';
-}
-
-function board_notice_directory(string $boardId): string
-{
-    return notice_storage_root() . '/' . $boardId;
-}
-
-function board_notices_path(string $boardId): string
-{
-    return board_notice_directory($boardId) . '/notices.json';
-}
-
-function users_path(): string
-{
-    return DATA_ROOT . '/users.json';
-}
-
-function board_reactions_path(string $boardId): string
-{
-    return board_notice_directory($boardId) . '/reactions.json';
-}
-
-function board_feedback_path(string $boardId): string
-{
-    return board_notice_directory($boardId) . '/feedback.json';
-}
-
-function board_feedback_pending_path(string $boardId): string
-{
-    return board_notice_directory($boardId) . '/feedback-pending.json';
 }
 
 function attachment_public_path(string $filename): string
@@ -164,39 +129,119 @@ function attachment_allowed_types(): array
     ];
 }
 
-function ensure_attachment_root(): void
+function env_value(string $key, ?string $default = null): ?string
 {
-    if (is_dir(ATTACHMENT_ROOT)) {
-        return;
+    $value = getenv($key);
+    if ($value === false || $value === '') {
+        return $default;
     }
 
-    if (!mkdir(ATTACHMENT_ROOT, 0775, true) && !is_dir(ATTACHMENT_ROOT)) {
-        throw new RuntimeException('Unable to create the attachment storage directory.');
+    return $value;
+}
+
+function database_settings(): array
+{
+    return [
+        'host' => env_value('DB_HOST', defined('DB_HOST') ? DB_HOST : '127.0.0.1'),
+        'port' => (int) env_value('DB_PORT', defined('DB_PORT') ? (string) DB_PORT : '3306'),
+        'name' => env_value('DB_NAME', defined('DB_NAME') ? DB_NAME : null),
+        'username' => env_value('DB_USERNAME', defined('DB_USERNAME') ? DB_USERNAME : null),
+        'password' => env_value('DB_PASSWORD', defined('DB_PASSWORD') ? DB_PASSWORD : ''),
+        'charset' => env_value('DB_CHARSET', defined('DB_CHARSET') ? DB_CHARSET : 'utf8mb4'),
+    ];
+}
+
+function database(): PDO
+{
+    static $pdo = null;
+
+    if ($pdo instanceof PDO) {
+        return $pdo;
+    }
+
+    if (!class_exists(PDO::class)) {
+        throw new RuntimeException('PDO is not available in this PHP environment.');
+    }
+
+    $settings = database_settings();
+    if (($settings['name'] ?? '') === '' || ($settings['username'] ?? '') === '') {
+        throw new RuntimeException('Database settings are incomplete. Configure DB_NAME, DB_USERNAME, and related MySQL settings before using the bulletin board.');
+    }
+
+    $dsn = sprintf(
+        'mysql:host=%s;port=%d;dbname=%s;charset=%s',
+        (string) $settings['host'],
+        (int) $settings['port'],
+        (string) $settings['name'],
+        (string) $settings['charset']
+    );
+
+    $pdo = new PDO(
+        $dsn,
+        (string) $settings['username'],
+        (string) $settings['password'],
+        [
+            PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+            PDO::ATTR_EMULATE_PREPARES => false,
+        ]
+    );
+
+    return $pdo;
+}
+
+function database_transaction(callable $callback): mixed
+{
+    $pdo = database();
+
+    if ($pdo->inTransaction()) {
+        return $callback($pdo);
+    }
+
+    $pdo->beginTransaction();
+
+    try {
+        $result = $callback($pdo);
+        $pdo->commit();
+        return $result;
+    } catch (Throwable $exception) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        throw $exception;
     }
 }
 
-function ensure_notice_storage_root(): void
+function valid_board_id(string $boardId): bool
 {
-    $path = notice_storage_root();
-    if (is_dir($path)) {
-        return;
-    }
-
-    if (!mkdir($path, 0775, true) && !is_dir($path)) {
-        throw new RuntimeException('Unable to create the notice storage directory.');
-    }
+    return isset(board_catalog()[$boardId]);
 }
 
-function ensure_board_notice_directory(string $boardId): void
+function valid_feedback_board_id(string $boardId): bool
 {
-    $path = board_notice_directory($boardId);
-    if (is_dir($path)) {
-        return;
-    }
+    return valid_board_id($boardId);
+}
 
-    if (!mkdir($path, 0775, true) && !is_dir($path)) {
-        throw new RuntimeException('Unable to create the board notice storage directory.');
-    }
+function feedback_type_options(): array
+{
+    return [
+        'praise_appreciation' => 'Praise/Appreciation',
+        'suggestion' => 'Suggestion',
+        'constructive_feedback' => 'Constructive Feedback',
+        'concern' => 'Concern',
+        'complaint' => 'Complaint',
+        'other' => 'Other',
+    ];
+}
+
+function feedback_types(): array
+{
+    return array_keys(feedback_type_options());
+}
+
+function feedback_type_label(string $type): string
+{
+    return feedback_type_options()[$type] ?? $type;
 }
 
 function sanitize_attachment_name(string $name): string
@@ -225,6 +270,17 @@ function normalize_attachment_record(mixed $attachment): ?array
         'kind' => (string) ($attachment['kind'] ?? ''),
         'size' => (int) ($attachment['size'] ?? 0),
     ];
+}
+
+function ensure_attachment_root(): void
+{
+    if (is_dir(ATTACHMENT_ROOT)) {
+        return;
+    }
+
+    if (!mkdir(ATTACHMENT_ROOT, 0775, true) && !is_dir(ATTACHMENT_ROOT)) {
+        throw new RuntimeException('Unable to create the attachment storage directory.');
+    }
 }
 
 function store_uploaded_attachment(array $file): array
@@ -307,130 +363,151 @@ function delete_attachment_file(?array $attachment): void
     }
 }
 
-function read_json_file(string $path): array
+function iso8601_to_mysql_datetime(?string $value): ?string
 {
-    if (!is_file($path)) {
-        return [];
+    $value = trim((string) $value);
+    if ($value === '') {
+        return null;
     }
 
-    $content = file_get_contents($path);
-    if ($content === false || $content === '') {
-        return [];
+    $timestamp = strtotime($value);
+    if ($timestamp === false) {
+        return null;
     }
 
-    $decoded = json_decode($content, true);
-    return is_array($decoded) ? $decoded : [];
+    return gmdate('Y-m-d H:i:s', $timestamp);
 }
 
-function read_json_file_locked(string $path): array
+function mysql_datetime_to_iso8601(?string $value): string
 {
-    if (!is_file($path)) {
-        return [];
+    $value = trim((string) $value);
+    if ($value === '') {
+        return '';
     }
 
-    $handle = fopen($path, 'c+');
-    if ($handle === false) {
-        throw new RuntimeException('Unable to open JSON file.');
+    $timestamp = strtotime($value . ' UTC');
+    if ($timestamp === false) {
+        $timestamp = strtotime($value);
     }
 
-    try {
-        if (!flock($handle, LOCK_SH)) {
-            throw new RuntimeException('Unable to acquire read lock.');
-        }
-
-        rewind($handle);
-        $content = stream_get_contents($handle);
-        flock($handle, LOCK_UN);
-    } finally {
-        fclose($handle);
-    }
-
-    if ($content === false || $content === '') {
-        return [];
-    }
-
-    $decoded = json_decode($content, true);
-    return is_array($decoded) ? $decoded : [];
+    return $timestamp === false ? $value : gmdate('c', $timestamp);
 }
 
-function write_json_file(string $path, array $payload): void
+function normalize_user_record(array $user): array
 {
-    $encoded = json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
-    if ($encoded === false) {
-        throw new RuntimeException('Unable to encode JSON payload.');
+    $boardIds = $user['board_ids'] ?? [];
+    if (!is_array($boardIds)) {
+        $boardIds = [];
     }
 
-    file_put_contents($path, $encoded, LOCK_EX);
-}
+    $boardIds = array_values(array_filter(array_map(
+        static fn ($boardId): string => trim((string) $boardId),
+        $boardIds
+    ), 'valid_board_id'));
 
-function valid_board_id(string $boardId): bool
-{
-    return isset(board_catalog()[$boardId]);
-}
-
-function partition_notices_by_board(array $notices): array
-{
-    $partitioned = [];
-
-    foreach ($notices as $notice) {
-        $boardId = (string) ($notice['board_id'] ?? '');
-        if (!valid_board_id($boardId)) {
-            continue;
-        }
-
-        $partitioned[$boardId][] = normalize_notice_record($notice);
-    }
-
-    return $partitioned;
-}
-
-function notices_for_board(string $boardId): array
-{
-    if (!valid_board_id($boardId)) {
-        return [];
-    }
-
-    $notices = read_json_file_locked(board_notices_path($boardId));
-
-    return array_map('normalize_notice_record', $notices);
-}
-
-function write_partitioned_notices(array $notices): void
-{
-    ensure_notice_storage_root();
-
-    $partitioned = partition_notices_by_board($notices);
-    foreach (board_catalog() as $boardId => $_board) {
-        ensure_board_notice_directory($boardId);
-        write_json_file(board_notices_path($boardId), $partitioned[$boardId] ?? []);
-    }
-}
-
-function feedback_type_options(): array
-{
     return [
-        'praise_appreciation' => 'Praise/Appreciation',
-        'suggestion' => 'Suggestion',
-        'constructive_feedback' => 'Constructive Feedback',
-        'concern' => 'Concern',
-        'complaint' => 'Complaint',
-        'other' => 'Other',
+        'username' => trim((string) ($user['username'] ?? '')),
+        'name' => trim((string) ($user['name'] ?? '')),
+        'role' => trim((string) ($user['role'] ?? 'program_chair')),
+        'default_username' => trim((string) ($user['default_username'] ?? '')),
+        'default_password_hash' => (string) ($user['default_password_hash'] ?? ''),
+        'password_hash' => (string) ($user['password_hash'] ?? ''),
+        'board_ids' => array_values(array_unique($boardIds)),
     ];
 }
 
-function feedback_types(): array
+function hydrate_users(?PDO $pdo = null): array
 {
-    return array_keys(feedback_type_options());
+    $pdo ??= database();
+    $users = [];
+
+    $statement = $pdo->query('SELECT username, name, role, default_username, default_password_hash, password_hash FROM users ORDER BY id ASC');
+    foreach ($statement->fetchAll() as $row) {
+        $user = normalize_user_record($row);
+        $user['board_ids'] = [];
+        $users[$user['username']] = $user;
+    }
+
+    if ($users === []) {
+        return [];
+    }
+
+    $boardStatement = $pdo->query('SELECT u.username, ub.board_id FROM user_boards ub INNER JOIN users u ON u.id = ub.user_id ORDER BY u.id ASC, ub.sort_order ASC, ub.id ASC');
+    foreach ($boardStatement->fetchAll() as $row) {
+        $username = (string) ($row['username'] ?? '');
+        if (!isset($users[$username])) {
+            continue;
+        }
+
+        $boardId = trim((string) ($row['board_id'] ?? ''));
+        if (valid_board_id($boardId)) {
+            $users[$username]['board_ids'][] = $boardId;
+        }
+    }
+
+    return array_values($users);
 }
 
-function feedback_type_label(string $type): string
+function all_users(): array
 {
-    return feedback_type_options()[$type] ?? $type;
+    return hydrate_users();
 }
 
-function valid_feedback_board_id(string $boardId): bool
+function persist_users(array $users, ?PDO $pdo = null): void
 {
-    return valid_board_id($boardId);
+    $pdo ??= database();
+    $users = array_map('normalize_user_record', $users);
+
+    $pdo->exec('DELETE FROM user_boards');
+    $pdo->exec('DELETE FROM users');
+
+    $userStatement = $pdo->prepare('
+        INSERT INTO users (username, name, role, default_username, default_password_hash, password_hash)
+        VALUES (:username, :name, :role, :default_username, :default_password_hash, :password_hash)
+    ');
+    $boardStatement = $pdo->prepare('
+        INSERT INTO user_boards (user_id, board_id, sort_order)
+        VALUES (:user_id, :board_id, :sort_order)
+    ');
+
+    foreach ($users as $user) {
+        if ($user['username'] === '' || $user['name'] === '' || $user['password_hash'] === '') {
+            throw new RuntimeException('User records must include username, name, and password hash.');
+        }
+
+        $userStatement->execute([
+            ':username' => $user['username'],
+            ':name' => $user['name'],
+            ':role' => $user['role'],
+            ':default_username' => $user['default_username'] !== '' ? $user['default_username'] : $user['username'],
+            ':default_password_hash' => $user['default_password_hash'] !== '' ? $user['default_password_hash'] : $user['password_hash'],
+            ':password_hash' => $user['password_hash'],
+        ]);
+
+        $userId = (int) $pdo->lastInsertId();
+        foreach ($user['board_ids'] as $sortOrder => $boardId) {
+            $boardStatement->execute([
+                ':user_id' => $userId,
+                ':board_id' => $boardId,
+                ':sort_order' => $sortOrder,
+            ]);
+        }
+    }
+}
+
+function mutate_users(callable $mutator): array
+{
+    return database_transaction(static function (PDO $pdo) use ($mutator): array {
+        $users = hydrate_users($pdo);
+        $updatedUsers = $mutator($users);
+        if (!is_array($updatedUsers)) {
+            throw new RuntimeException('User mutation failed.');
+        }
+
+        persist_users($updatedUsers, $pdo);
+
+        return hydrate_users($pdo);
+    });
 }
 
 function normalize_feedback_record(array $feedback): array
@@ -442,7 +519,7 @@ function normalize_feedback_record(array $feedback): array
         'message' => trim((string) ($feedback['message'] ?? '')),
         'is_anonymous' => (bool) ($feedback['is_anonymous'] ?? true),
         'email' => (string) ($feedback['email'] ?? ''),
-        'created_at' => (string) ($feedback['created_at'] ?? ''),
+        'created_at' => mysql_datetime_to_iso8601((string) ($feedback['created_at'] ?? '')),
     ];
 }
 
@@ -455,8 +532,8 @@ function normalize_feedback_pending_record(array $pending): array
         'message' => trim((string) ($pending['message'] ?? '')),
         'is_anonymous' => (bool) ($pending['is_anonymous'] ?? true),
         'otp_hash' => (string) ($pending['otp_hash'] ?? ''),
-        'requested_at' => (string) ($pending['requested_at'] ?? ''),
-        'expires_at' => (string) ($pending['expires_at'] ?? ''),
+        'requested_at' => mysql_datetime_to_iso8601((string) ($pending['requested_at'] ?? '')),
+        'expires_at' => mysql_datetime_to_iso8601((string) ($pending['expires_at'] ?? '')),
     ];
 }
 
@@ -481,12 +558,15 @@ function feedback_for_board(string $boardId): array
         return [];
     }
 
-    $feedback = read_json_file_locked(board_feedback_path($boardId));
-    if (!is_array($feedback)) {
-        return [];
-    }
+    $statement = database()->prepare('
+        SELECT id, board_id, type, message, is_anonymous, email, created_at
+        FROM feedback
+        WHERE board_id = :board_id
+        ORDER BY created_at DESC, id DESC
+    ');
+    $statement->execute([':board_id' => $boardId]);
 
-    return array_map('normalize_feedback_record', $feedback);
+    return array_map('normalize_feedback_record', $statement->fetchAll());
 }
 
 function pending_feedback_for_board(string $boardId): array
@@ -495,12 +575,15 @@ function pending_feedback_for_board(string $boardId): array
         return [];
     }
 
-    $pending = read_json_file_locked(board_feedback_pending_path($boardId));
-    if (!is_array($pending)) {
-        return [];
-    }
+    $statement = database()->prepare('
+        SELECT board_id, email, type, message, is_anonymous, otp_hash, requested_at, expires_at
+        FROM feedback_pending
+        WHERE board_id = :board_id
+        ORDER BY requested_at DESC, id DESC
+    ');
+    $statement->execute([':board_id' => $boardId]);
 
-    return array_map('normalize_feedback_pending_record', $pending);
+    return array_map('normalize_feedback_pending_record', $statement->fetchAll());
 }
 
 function sort_feedback_latest_first(array &$feedback): void
@@ -511,51 +594,74 @@ function sort_feedback_latest_first(array &$feedback): void
     );
 }
 
+function persist_feedback_for_board(string $boardId, array $feedback, ?PDO $pdo = null): void
+{
+    $pdo ??= database();
+    $statementDelete = $pdo->prepare('DELETE FROM feedback WHERE board_id = :board_id');
+    $statementDelete->execute([':board_id' => $boardId]);
+
+    $statementInsert = $pdo->prepare('
+        INSERT INTO feedback (id, board_id, type, message, is_anonymous, email, created_at)
+        VALUES (:id, :board_id, :type, :message, :is_anonymous, :email, :created_at)
+    ');
+
+    foreach ($feedback as $item) {
+        $item = normalize_feedback_record($item);
+        $statementInsert->execute([
+            ':id' => $item['id'],
+            ':board_id' => $boardId,
+            ':type' => $item['type'],
+            ':message' => $item['message'],
+            ':is_anonymous' => $item['is_anonymous'] ? 1 : 0,
+            ':email' => $item['email'] !== '' ? $item['email'] : null,
+            ':created_at' => iso8601_to_mysql_datetime($item['created_at']) ?? gmdate('Y-m-d H:i:s'),
+        ]);
+    }
+}
+
+function persist_pending_feedback_for_board(string $boardId, array $pending, ?PDO $pdo = null): void
+{
+    $pdo ??= database();
+    $statementDelete = $pdo->prepare('DELETE FROM feedback_pending WHERE board_id = :board_id');
+    $statementDelete->execute([':board_id' => $boardId]);
+
+    $statementInsert = $pdo->prepare('
+        INSERT INTO feedback_pending (board_id, email, type, message, is_anonymous, otp_hash, requested_at, expires_at)
+        VALUES (:board_id, :email, :type, :message, :is_anonymous, :otp_hash, :requested_at, :expires_at)
+    ');
+
+    foreach ($pending as $item) {
+        $item = normalize_feedback_pending_record($item);
+        $statementInsert->execute([
+            ':board_id' => $boardId,
+            ':email' => $item['email'],
+            ':type' => $item['type'],
+            ':message' => $item['message'],
+            ':is_anonymous' => $item['is_anonymous'] ? 1 : 0,
+            ':otp_hash' => $item['otp_hash'],
+            ':requested_at' => iso8601_to_mysql_datetime($item['requested_at']) ?? gmdate('Y-m-d H:i:s'),
+            ':expires_at' => iso8601_to_mysql_datetime($item['expires_at']) ?? gmdate('Y-m-d H:i:s'),
+        ]);
+    }
+}
+
 function mutate_feedback_for_board(string $boardId, callable $mutator): array
 {
     if (!valid_feedback_board_id($boardId)) {
         throw new RuntimeException('Invalid board selected.');
     }
 
-    ensure_notice_storage_root();
-    ensure_board_notice_directory($boardId);
-
-    $path = board_feedback_path($boardId);
-    $handle = fopen($path, 'c+');
-    if ($handle === false) {
-        throw new RuntimeException('Unable to open feedback storage.');
-    }
-
-    try {
-        if (!flock($handle, LOCK_EX)) {
-            throw new RuntimeException('Unable to acquire feedback write lock.');
-        }
-
-        rewind($handle);
-        $content = stream_get_contents($handle);
-        $decoded = ($content === false || $content === '') ? [] : json_decode($content, true);
-        $feedback = is_array($decoded) ? array_map('normalize_feedback_record', $decoded) : [];
-
+    return database_transaction(static function (PDO $pdo) use ($boardId, $mutator): array {
+        $feedback = feedback_for_board($boardId);
         $updatedFeedback = $mutator($feedback);
         if (!is_array($updatedFeedback)) {
             throw new RuntimeException('Feedback mutation failed.');
         }
 
-        $encoded = json_encode($updatedFeedback, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
-        if ($encoded === false) {
-            throw new RuntimeException('Unable to encode feedback storage.');
-        }
+        persist_feedback_for_board($boardId, $updatedFeedback, $pdo);
 
-        ftruncate($handle, 0);
-        rewind($handle);
-        fwrite($handle, $encoded);
-        fflush($handle);
-        flock($handle, LOCK_UN);
-
-        return array_map('normalize_feedback_record', $updatedFeedback);
-    } finally {
-        fclose($handle);
-    }
+        return feedback_for_board($boardId);
+    });
 }
 
 function mutate_pending_feedback_for_board(string $boardId, callable $mutator): array
@@ -564,45 +670,17 @@ function mutate_pending_feedback_for_board(string $boardId, callable $mutator): 
         throw new RuntimeException('Invalid board selected.');
     }
 
-    ensure_notice_storage_root();
-    ensure_board_notice_directory($boardId);
-
-    $path = board_feedback_pending_path($boardId);
-    $handle = fopen($path, 'c+');
-    if ($handle === false) {
-        throw new RuntimeException('Unable to open pending feedback storage.');
-    }
-
-    try {
-        if (!flock($handle, LOCK_EX)) {
-            throw new RuntimeException('Unable to acquire pending feedback write lock.');
-        }
-
-        rewind($handle);
-        $content = stream_get_contents($handle);
-        $decoded = ($content === false || $content === '') ? [] : json_decode($content, true);
-        $pending = is_array($decoded) ? array_map('normalize_feedback_pending_record', $decoded) : [];
-
+    return database_transaction(static function (PDO $pdo) use ($boardId, $mutator): array {
+        $pending = pending_feedback_for_board($boardId);
         $updatedPending = $mutator($pending);
         if (!is_array($updatedPending)) {
             throw new RuntimeException('Pending feedback mutation failed.');
         }
 
-        $encoded = json_encode($updatedPending, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
-        if ($encoded === false) {
-            throw new RuntimeException('Unable to encode pending feedback storage.');
-        }
+        persist_pending_feedback_for_board($boardId, $updatedPending, $pdo);
 
-        ftruncate($handle, 0);
-        rewind($handle);
-        fwrite($handle, $encoded);
-        fflush($handle);
-        flock($handle, LOCK_UN);
-
-        return array_map('normalize_feedback_pending_record', $updatedPending);
-    } finally {
-        fclose($handle);
-    }
+        return pending_feedback_for_board($boardId);
+    });
 }
 
 function prune_expired_pending_feedback(array $pending): array
@@ -615,16 +693,6 @@ function prune_expired_pending_feedback(array $pending): array
     ));
 }
 
-function env_value(string $key, ?string $default = null): ?string
-{
-    $value = getenv($key);
-    if ($value === false || $value === '') {
-        return $default;
-    }
-
-    return $value;
-}
-
 function mailer_settings(): array
 {
     return [
@@ -635,15 +703,6 @@ function mailer_settings(): array
         'encryption' => env_value('SMTP_ENCRYPTION', defined('SMTP_ENCRYPTION') ? SMTP_ENCRYPTION : 'ssl'),
         'from_email' => env_value('SMTP_FROM_EMAIL', defined('SMTP_FROM_EMAIL') ? SMTP_FROM_EMAIL : null),
         'from_name' => env_value('SMTP_FROM_NAME', defined('SMTP_FROM_NAME') ? SMTP_FROM_NAME : 'NU Lipa SACE Bulletin'),
-    ];
-}
-
-function mailer_library_paths(): array
-{
-    return [
-        APP_ROOT . '/vendor/autoload.php',
-        APP_ROOT . '/includes/PHPMailer/src/PHPMailer.php',
-        APP_ROOT . '/includes/vendor/phpmailer/src/PHPMailer.php',
     ];
 }
 
@@ -834,7 +893,7 @@ function verify_feedback_otp_and_save(string $boardId, string $email, string $ot
         $feedback[] = [
             'id' => uniqid('feedback_', true),
             'board_id' => (string) ($matched['board_id'] ?? ''),
-            'type' => (string) ($matched['type'] ?? 'report'),
+            'type' => (string) ($matched['type'] ?? 'other'),
             'message' => (string) ($matched['message'] ?? ''),
             'is_anonymous' => (bool) ($matched['is_anonymous'] ?? true),
             'email' => !empty($matched['is_anonymous']) ? '' : $email,
@@ -845,128 +904,13 @@ function verify_feedback_otp_and_save(string $boardId, string $email, string $ot
     });
 }
 
-function all_reactions(): array
-{
-    $reactions = [];
-    foreach (board_catalog() as $boardId => $_board) {
-        foreach (reactions_for_board($boardId) as $noticeId => $noticeReactions) {
-            $reactions[$noticeId] = is_array($noticeReactions) ? $noticeReactions : [];
-        }
-    }
-
-    return $reactions;
-}
-
-function reactions_for_board(string $boardId): array
-{
-    if (!valid_board_id($boardId)) {
-        return [];
-    }
-
-    $reactions = read_json_file_locked(board_reactions_path($boardId));
-
-    return is_array($reactions) ? $reactions : [];
-}
-
-function all_users(): array
-{
-    return read_json_file_locked(users_path());
-}
-
-function mutate_users(callable $mutator): array
-{
-    $path = users_path();
-    $handle = fopen($path, 'c+');
-    if ($handle === false) {
-        throw new RuntimeException('Unable to open user storage.');
-    }
-
-    try {
-        if (!flock($handle, LOCK_EX)) {
-            throw new RuntimeException('Unable to acquire user write lock.');
-        }
-
-        rewind($handle);
-        $content = stream_get_contents($handle);
-        $decoded = ($content === false || $content === '') ? [] : json_decode($content, true);
-        $users = is_array($decoded) ? $decoded : [];
-
-        $updatedUsers = $mutator($users);
-        if (!is_array($updatedUsers)) {
-            throw new RuntimeException('User mutation failed.');
-        }
-
-        $encoded = json_encode($updatedUsers, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
-        if ($encoded === false) {
-            throw new RuntimeException('Unable to encode user storage.');
-        }
-
-        ftruncate($handle, 0);
-        rewind($handle);
-        fwrite($handle, $encoded);
-        fflush($handle);
-        flock($handle, LOCK_UN);
-
-        return $updatedUsers;
-    } finally {
-        fclose($handle);
-    }
-}
-
-function mutate_reactions(string $boardId, callable $mutator): array
-{
-    if (!valid_board_id($boardId)) {
-        throw new RuntimeException('Invalid board selected for reactions.');
-    }
-
-    ensure_notice_storage_root();
-    ensure_board_notice_directory($boardId);
-
-    $path = board_reactions_path($boardId);
-    $handle = fopen($path, 'c+');
-    if ($handle === false) {
-        throw new RuntimeException('Unable to open reaction storage.');
-    }
-
-    try {
-        if (!flock($handle, LOCK_EX)) {
-            throw new RuntimeException('Unable to acquire reaction write lock.');
-        }
-
-        rewind($handle);
-        $content = stream_get_contents($handle);
-        $decoded = ($content === false || $content === '') ? [] : json_decode($content, true);
-        $reactions = is_array($decoded) ? $decoded : [];
-
-        $updatedReactions = $mutator($reactions);
-        if (!is_array($updatedReactions)) {
-            throw new RuntimeException('Reaction mutation failed.');
-        }
-
-        $encoded = json_encode($updatedReactions, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
-        if ($encoded === false) {
-            throw new RuntimeException('Unable to encode reaction storage.');
-        }
-
-        ftruncate($handle, 0);
-        rewind($handle);
-        fwrite($handle, $encoded);
-        fflush($handle);
-        flock($handle, LOCK_UN);
-
-        return $updatedReactions;
-    } finally {
-        fclose($handle);
-    }
-}
-
 function normalize_notice_record(array $notice): array
 {
     $notice['created_by'] = (string) ($notice['created_by'] ?? 'system');
     $notice['created_by_name'] = (string) ($notice['created_by_name'] ?? 'System Seeded Notice');
     $notice['pinned'] = (bool) ($notice['pinned'] ?? false);
-    $notice['created_at'] = (string) ($notice['created_at'] ?? '');
-    $notice['updated_at'] = (string) ($notice['updated_at'] ?? '');
+    $notice['created_at'] = mysql_datetime_to_iso8601((string) ($notice['created_at'] ?? ''));
+    $notice['updated_at'] = mysql_datetime_to_iso8601((string) ($notice['updated_at'] ?? ''));
     $notice['visible_from'] = (string) ($notice['visible_from'] ?? '0001-01-01');
     $notice['visible_until'] = (string) ($notice['visible_until'] ?? '9999-12-31');
     $rawTags = $notice['tags'] ?? ($notice['tag'] ?? []);
@@ -986,6 +930,201 @@ function normalize_notice_record(array $notice): array
     return $notice;
 }
 
+function fetch_notice_tags(array $noticeIds, ?PDO $pdo = null): array
+{
+    $pdo ??= database();
+    if ($noticeIds === []) {
+        return [];
+    }
+
+    $placeholders = implode(', ', array_fill(0, count($noticeIds), '?'));
+    $statement = $pdo->prepare("
+        SELECT notice_id, tag
+        FROM notice_tags
+        WHERE notice_id IN ({$placeholders})
+        ORDER BY sort_order ASC, id ASC
+    ");
+    $statement->execute(array_values($noticeIds));
+
+    $tagsByNotice = [];
+    foreach ($statement->fetchAll() as $row) {
+        $tagsByNotice[(string) $row['notice_id']][] = trim((string) $row['tag']);
+    }
+
+    return $tagsByNotice;
+}
+
+function fetch_notices(?string $boardId = null, ?PDO $pdo = null): array
+{
+    $pdo ??= database();
+
+    $sql = '
+        SELECT
+            id,
+            board_id,
+            category,
+            audience,
+            title,
+            notice_date,
+            visible_from,
+            visible_until,
+            body_text,
+            pinned,
+            created_by,
+            created_by_name,
+            created_at,
+            updated_at,
+            attachment_path,
+            attachment_name,
+            attachment_mime,
+            attachment_kind,
+            attachment_size
+        FROM notices
+    ';
+    $params = [];
+
+    if ($boardId !== null) {
+        $sql .= ' WHERE board_id = :board_id';
+        $params[':board_id'] = $boardId;
+    }
+
+    $sql .= ' ORDER BY created_at DESC, id DESC';
+
+    $statement = $pdo->prepare($sql);
+    $statement->execute($params);
+    $rows = $statement->fetchAll();
+    $noticeIds = array_map(static fn (array $row): string => (string) $row['id'], $rows);
+    $tagsByNotice = fetch_notice_tags($noticeIds, $pdo);
+
+    $notices = [];
+    foreach ($rows as $row) {
+        $noticeId = (string) $row['id'];
+        $attachment = null;
+        if (!empty($row['attachment_path'])) {
+            $attachment = [
+                'path' => (string) $row['attachment_path'],
+                'name' => (string) ($row['attachment_name'] ?? ''),
+                'mime' => (string) ($row['attachment_mime'] ?? ''),
+                'kind' => (string) ($row['attachment_kind'] ?? ''),
+                'size' => (int) ($row['attachment_size'] ?? 0),
+            ];
+        }
+
+        $notices[] = normalize_notice_record([
+            'id' => $noticeId,
+            'board_id' => (string) $row['board_id'],
+            'category' => (string) $row['category'],
+            'audience' => (string) $row['audience'],
+            'title' => (string) $row['title'],
+            'date' => (string) $row['notice_date'],
+            'visible_from' => (string) $row['visible_from'],
+            'visible_until' => (string) $row['visible_until'],
+            'text' => (string) $row['body_text'],
+            'tags' => $tagsByNotice[$noticeId] ?? [],
+            'pinned' => (bool) $row['pinned'],
+            'created_by' => (string) $row['created_by'],
+            'created_by_name' => (string) $row['created_by_name'],
+            'created_at' => (string) $row['created_at'],
+            'updated_at' => (string) $row['updated_at'],
+            'attachment' => $attachment,
+        ]);
+    }
+
+    return $notices;
+}
+
+function notices_for_board(string $boardId): array
+{
+    if (!valid_board_id($boardId)) {
+        return [];
+    }
+
+    return fetch_notices($boardId);
+}
+
+function all_notices(): array
+{
+    return fetch_notices();
+}
+
+function persist_notices(array $notices, ?PDO $pdo = null): void
+{
+    $pdo ??= database();
+    $notices = array_map('normalize_notice_record', $notices);
+
+    $pdo->exec('DELETE FROM notice_tags');
+    $pdo->exec('DELETE FROM notices');
+
+    $noticeStatement = $pdo->prepare('
+        INSERT INTO notices (
+            id, board_id, category, audience, title, notice_date, visible_from, visible_until,
+            body_text, pinned, created_by, created_by_name, created_at, updated_at,
+            attachment_path, attachment_name, attachment_mime, attachment_kind, attachment_size
+        )
+        VALUES (
+            :id, :board_id, :category, :audience, :title, :notice_date, :visible_from, :visible_until,
+            :body_text, :pinned, :created_by, :created_by_name, :created_at, :updated_at,
+            :attachment_path, :attachment_name, :attachment_mime, :attachment_kind, :attachment_size
+        )
+    ');
+    $tagStatement = $pdo->prepare('
+        INSERT INTO notice_tags (notice_id, tag, sort_order)
+        VALUES (:notice_id, :tag, :sort_order)
+    ');
+
+    foreach ($notices as $notice) {
+        if (!valid_board_id((string) $notice['board_id'])) {
+            continue;
+        }
+
+        $attachment = normalize_attachment_record($notice['attachment'] ?? null);
+        $noticeStatement->execute([
+            ':id' => (string) $notice['id'],
+            ':board_id' => (string) $notice['board_id'],
+            ':category' => (string) $notice['category'],
+            ':audience' => (string) $notice['audience'],
+            ':title' => (string) $notice['title'],
+            ':notice_date' => (string) $notice['date'],
+            ':visible_from' => (string) $notice['visible_from'],
+            ':visible_until' => (string) $notice['visible_until'],
+            ':body_text' => (string) $notice['text'],
+            ':pinned' => !empty($notice['pinned']) ? 1 : 0,
+            ':created_by' => (string) $notice['created_by'],
+            ':created_by_name' => (string) $notice['created_by_name'],
+            ':created_at' => iso8601_to_mysql_datetime((string) $notice['created_at']) ?? gmdate('Y-m-d H:i:s'),
+            ':updated_at' => iso8601_to_mysql_datetime((string) $notice['updated_at']) ?? gmdate('Y-m-d H:i:s'),
+            ':attachment_path' => $attachment['path'] ?? null,
+            ':attachment_name' => $attachment['name'] ?? null,
+            ':attachment_mime' => $attachment['mime'] ?? null,
+            ':attachment_kind' => $attachment['kind'] ?? null,
+            ':attachment_size' => $attachment['size'] ?? null,
+        ]);
+
+        foreach (($notice['tags'] ?? []) as $index => $tag) {
+            $tagStatement->execute([
+                ':notice_id' => (string) $notice['id'],
+                ':tag' => trim((string) $tag),
+                ':sort_order' => $index,
+            ]);
+        }
+    }
+}
+
+function mutate_notices(callable $mutator): array
+{
+    return database_transaction(static function (PDO $pdo) use ($mutator): array {
+        $notices = fetch_notices(null, $pdo);
+        $updatedNotices = $mutator($notices);
+        if (!is_array($updatedNotices)) {
+            throw new RuntimeException('Notice mutation failed.');
+        }
+
+        persist_notices($updatedNotices, $pdo);
+
+        return fetch_notices(null, $pdo);
+    });
+}
+
 function normalize_client_id(string $clientId): string
 {
     $sanitized = preg_replace('/[^A-Za-z0-9_-]/', '', $clientId);
@@ -997,14 +1136,121 @@ function reaction_types(): array
     return ['like', 'heart'];
 }
 
-function board_id_for_notice_id(string $noticeId): ?string
+function all_reactions(): array
 {
-    $notice = find_notice_by_id(all_notices(), $noticeId);
-    if ($notice === null) {
-        return null;
+    $statement = database()->query('SELECT notice_id, reaction_type, client_id FROM notice_reactions ORDER BY id ASC');
+    $reactions = [];
+
+    foreach ($statement->fetchAll() as $row) {
+        $noticeId = (string) $row['notice_id'];
+        $type = (string) $row['reaction_type'];
+        $clientId = normalize_client_id((string) $row['client_id']);
+        if ($noticeId === '' || !in_array($type, reaction_types(), true) || $clientId === '') {
+            continue;
+        }
+        $reactions[$noticeId][$type][] = $clientId;
     }
 
-    $boardId = (string) ($notice['board_id'] ?? '');
+    return $reactions;
+}
+
+function reactions_for_board(string $boardId): array
+{
+    if (!valid_board_id($boardId)) {
+        return [];
+    }
+
+    $statement = database()->prepare('
+        SELECT nr.notice_id, nr.reaction_type, nr.client_id
+        FROM notice_reactions nr
+        INNER JOIN notices n ON n.id = nr.notice_id
+        WHERE n.board_id = :board_id
+        ORDER BY nr.id ASC
+    ');
+    $statement->execute([':board_id' => $boardId]);
+
+    $reactions = [];
+    foreach ($statement->fetchAll() as $row) {
+        $noticeId = (string) $row['notice_id'];
+        $type = (string) $row['reaction_type'];
+        $clientId = normalize_client_id((string) $row['client_id']);
+        if ($clientId === '' || !in_array($type, reaction_types(), true)) {
+            continue;
+        }
+        $reactions[$noticeId][$type][] = $clientId;
+    }
+
+    return $reactions;
+}
+
+function persist_reactions_for_board(string $boardId, array $reactions, ?PDO $pdo = null): void
+{
+    $pdo ??= database();
+
+    $delete = $pdo->prepare('
+        DELETE nr FROM notice_reactions nr
+        INNER JOIN notices n ON n.id = nr.notice_id
+        WHERE n.board_id = :board_id
+    ');
+    $delete->execute([':board_id' => $boardId]);
+
+    $insert = $pdo->prepare('
+        INSERT INTO notice_reactions (notice_id, reaction_type, client_id)
+        VALUES (:notice_id, :reaction_type, :client_id)
+    ');
+
+    foreach ($reactions as $noticeId => $noticeReactions) {
+        if (!is_array($noticeReactions)) {
+            continue;
+        }
+
+        foreach (reaction_types() as $reactionType) {
+            $clients = $noticeReactions[$reactionType] ?? [];
+            if (!is_array($clients)) {
+                continue;
+            }
+
+            $clients = array_values(array_unique(array_filter(array_map(
+                static fn ($value): string => normalize_client_id((string) $value),
+                $clients
+            ))));
+
+            foreach ($clients as $clientId) {
+                $insert->execute([
+                    ':notice_id' => (string) $noticeId,
+                    ':reaction_type' => $reactionType,
+                    ':client_id' => $clientId,
+                ]);
+            }
+        }
+    }
+}
+
+function mutate_reactions(string $boardId, callable $mutator): array
+{
+    if (!valid_board_id($boardId)) {
+        throw new RuntimeException('Invalid board selected for reactions.');
+    }
+
+    return database_transaction(static function (PDO $pdo) use ($boardId, $mutator): array {
+        $reactions = reactions_for_board($boardId);
+        $updatedReactions = $mutator($reactions);
+        if (!is_array($updatedReactions)) {
+            throw new RuntimeException('Reaction mutation failed.');
+        }
+
+        persist_reactions_for_board($boardId, $updatedReactions, $pdo);
+
+        return reactions_for_board($boardId);
+    });
+}
+
+function board_id_for_notice_id(string $noticeId): ?string
+{
+    $statement = database()->prepare('SELECT board_id FROM notices WHERE id = :id LIMIT 1');
+    $statement->execute([':id' => $noticeId]);
+    $boardId = (string) ($statement->fetchColumn() ?: '');
+
     return valid_board_id($boardId) ? $boardId : null;
 }
 
@@ -1084,48 +1330,6 @@ function toggle_notice_reaction(string $noticeId, string $reactionType, string $
     });
 
     return reaction_summary_for_notice($noticeId, $clientId, $boardId);
-}
-
-function all_notices(): array
-{
-    $notices = [];
-    foreach (board_catalog() as $boardId => $_board) {
-        foreach (notices_for_board($boardId) as $notice) {
-            $notices[] = $notice;
-        }
-    }
-
-    return $notices;
-}
-
-function mutate_notices(callable $mutator): array
-{
-    ensure_notice_storage_root();
-    $path = notice_storage_lock_path();
-    $handle = fopen($path, 'c+');
-    if ($handle === false) {
-        throw new RuntimeException('Unable to open notice storage.');
-    }
-
-    try {
-        if (!flock($handle, LOCK_EX)) {
-            throw new RuntimeException('Unable to acquire write lock.');
-        }
-
-        $notices = all_notices();
-
-        $updatedNotices = $mutator($notices);
-        if (!is_array($updatedNotices)) {
-            throw new RuntimeException('Notice mutation failed.');
-        }
-
-        write_partitioned_notices($updatedNotices);
-        flock($handle, LOCK_UN);
-
-        return array_map('normalize_notice_record', $updatedNotices);
-    } finally {
-        fclose($handle);
-    }
 }
 
 function today_ymd(): string
@@ -1229,11 +1433,11 @@ function require_login(): void
 
 function can_manage_board(array $user, string $boardId): bool
 {
-    if ($user['role'] === 'dean') {
+    if (($user['role'] ?? '') === 'dean') {
         return true;
     }
 
-    return in_array($boardId, $user['board_ids'], true);
+    return in_array($boardId, $user['board_ids'] ?? [], true);
 }
 
 function can_edit_notice(array $user, array $notice): bool
@@ -1281,13 +1485,13 @@ function accessible_boards(array $user): array
 {
     $catalog = board_catalog();
 
-    if ($user['role'] === 'dean') {
+    if (($user['role'] ?? '') === 'dean') {
         return $catalog;
     }
 
     return array_filter(
         $catalog,
-        static fn (array $board): bool => in_array($board['id'], $user['board_ids'], true)
+        static fn (array $board): bool => in_array($board['id'], $user['board_ids'] ?? [], true)
     );
 }
 

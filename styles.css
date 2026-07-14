@@ -1255,12 +1255,12 @@ main {
     grid-template-columns: 1fr;
   }
 
-  .calendar-event-card {
-    grid-template-columns: 1fr;
-  }
-
   .calendar-actions {
     flex-direction: column;
+  }
+
+  .calendar-event-card {
+    grid-template-columns: 1fr;
   }
 
   .calendar-event-date {
