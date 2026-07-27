@@ -903,6 +903,7 @@ main {
 .admin-editor,
 .admin-list {
   border-radius: var(--radius-lg);
+  min-width: 0;
 }
 
 .admin-login-card {
@@ -928,6 +929,7 @@ main {
   display: grid;
   grid-template-columns: minmax(320px, 420px) minmax(0, 1fr);
   gap: 24px;
+  align-items: start;
 }
 
 .admin-form-stack {
@@ -1054,6 +1056,8 @@ main {
 }
 
 .admin-table-wrap {
+  width: 100%;
+  max-width: 100%;
   overflow-x: auto;
   overflow-y: hidden;
   -webkit-overflow-scrolling: touch;
@@ -1476,6 +1480,10 @@ main {
     height: 56px;
   }
 
+  .admin-shell {
+    padding: 18px 14px 110px;
+  }
+
   .admin-topbar,
   .admin-notice-head {
     flex-direction: column;
@@ -1483,6 +1491,44 @@ main {
 
   .admin-grid {
     grid-template-columns: 1fr;
+  }
+
+  .admin-topbar,
+  .admin-editor,
+  .admin-list,
+  .admin-login-card {
+    padding: 18px;
+  }
+
+  .admin-table-toolbar {
+    justify-content: stretch;
+  }
+
+  .admin-table-search {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .admin-table-wrap {
+    margin-inline: -2px;
+  }
+
+  .admin-data-table {
+    min-width: 720px;
+  }
+
+  .admin-table-pagination {
+    align-items: stretch;
+  }
+
+  .admin-table-pageactions {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .admin-table-pages {
+    flex: 1 1 auto;
+    justify-content: center;
   }
 
   .attachment-modal {
