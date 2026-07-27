@@ -412,6 +412,10 @@ function normalize_user_record(array $user): array
         'default_username' => trim((string) ($user['default_username'] ?? '')),
         'default_password_hash' => (string) ($user['default_password_hash'] ?? ''),
         'password_hash' => (string) ($user['password_hash'] ?? ''),
+        'is_locked' => (bool) ($user['is_locked'] ?? false),
+        'totp_secret' => trim((string) ($user['totp_secret'] ?? '')),
+        'totp_enabled' => (bool) ($user['totp_enabled'] ?? false),
+        'totp_enabled_at' => mysql_datetime_to_iso8601((string) ($user['totp_enabled_at'] ?? '')),
         'board_ids' => array_values(array_unique($boardIds)),
     ];
 }
@@ -421,7 +425,7 @@ function hydrate_users(?PDO $pdo = null): array
     $pdo ??= database();
     $users = [];
 
-    $statement = $pdo->query('SELECT username, name, role, default_username, default_password_hash, password_hash FROM users ORDER BY id ASC');
+    $statement = $pdo->query('SELECT username, name, role, default_username, default_password_hash, password_hash, is_locked, totp_secret, totp_enabled, totp_enabled_at FROM users ORDER BY id ASC');
     foreach ($statement->fetchAll() as $row) {
         $user = normalize_user_record($row);
         $user['board_ids'] = [];
@@ -462,8 +466,8 @@ function persist_users(array $users, ?PDO $pdo = null): void
     $pdo->exec('DELETE FROM users');
 
     $userStatement = $pdo->prepare('
-        INSERT INTO users (username, name, role, default_username, default_password_hash, password_hash)
-        VALUES (:username, :name, :role, :default_username, :default_password_hash, :password_hash)
+        INSERT INTO users (username, name, role, default_username, default_password_hash, password_hash, is_locked, totp_secret, totp_enabled, totp_enabled_at)
+        VALUES (:username, :name, :role, :default_username, :default_password_hash, :password_hash, :is_locked, :totp_secret, :totp_enabled, :totp_enabled_at)
     ');
     $boardStatement = $pdo->prepare('
         INSERT INTO user_boards (user_id, board_id, sort_order)
@@ -482,6 +486,10 @@ function persist_users(array $users, ?PDO $pdo = null): void
             ':default_username' => $user['default_username'] !== '' ? $user['default_username'] : $user['username'],
             ':default_password_hash' => $user['default_password_hash'] !== '' ? $user['default_password_hash'] : $user['password_hash'],
             ':password_hash' => $user['password_hash'],
+            ':is_locked' => !empty($user['is_locked']) ? 1 : 0,
+            ':totp_secret' => $user['totp_secret'] !== '' ? $user['totp_secret'] : null,
+            ':totp_enabled' => !empty($user['totp_enabled']) ? 1 : 0,
+            ':totp_enabled_at' => iso8601_to_mysql_datetime((string) ($user['totp_enabled_at'] ?? '')),
         ]);
 
         $userId = (int) $pdo->lastInsertId();
@@ -1409,6 +1417,7 @@ function login_user(array $user): void
         'username' => $user['username'],
         'name' => $user['name'],
         'role' => $user['role'],
+        'is_locked' => !empty($user['is_locked']),
         'board_ids' => $user['board_ids'],
     ];
 }
@@ -1435,6 +1444,10 @@ function can_manage_board(array $user, string $boardId): bool
 {
     if (($user['role'] ?? '') === 'dean') {
         return true;
+    }
+
+    if (($user['role'] ?? '') === 'admin') {
+        return false;
     }
 
     return in_array($boardId, $user['board_ids'] ?? [], true);
@@ -1489,10 +1502,233 @@ function accessible_boards(array $user): array
         return $catalog;
     }
 
+    if (($user['role'] ?? '') === 'admin') {
+        return [];
+    }
+
     return array_filter(
         $catalog,
         static fn (array $board): bool => in_array($board['id'], $user['board_ids'] ?? [], true)
     );
+}
+
+function role_options(): array
+{
+    return [
+        'dean' => 'Dean',
+        'admin' => 'Admin',
+        'program_chair' => 'Program Chair',
+    ];
+}
+
+function role_label(string $role): string
+{
+    return role_options()[$role] ?? $role;
+}
+
+function can_manage_users(array $user): bool
+{
+    return in_array((string) ($user['role'] ?? ''), ['dean', 'admin'], true);
+}
+
+function can_manage_notice_module(array $user): bool
+{
+    return in_array((string) ($user['role'] ?? ''), ['dean', 'program_chair'], true);
+}
+
+function board_ids_for_role(string $role, array $submittedBoardIds = []): array
+{
+    if ($role === 'dean') {
+        return array_keys(board_catalog());
+    }
+
+    if ($role === 'admin') {
+        return [];
+    }
+
+    $validBoardIds = array_values(array_filter(array_map(
+        static fn ($boardId): string => trim((string) $boardId),
+        $submittedBoardIds
+    ), 'valid_board_id'));
+
+    return $validBoardIds === [] ? [] : [reset($validBoardIds)];
+}
+
+function primary_board_id_for_user(array $user): string
+{
+    return (string) (($user['board_ids'][0] ?? ''));
+}
+
+function authenticator_issuer(): string
+{
+    return 'NU Lipa SACE Bulletin';
+}
+
+function base32_alphabet(): string
+{
+    return 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+}
+
+function base32_encode_string(string $input): string
+{
+    if ($input === '') {
+        return '';
+    }
+
+    $alphabet = base32_alphabet();
+    $binary = '';
+    foreach (str_split($input) as $character) {
+        $binary .= str_pad(decbin(ord($character)), 8, '0', STR_PAD_LEFT);
+    }
+
+    $chunks = str_split($binary, 5);
+    $encoded = '';
+    foreach ($chunks as $chunk) {
+        $chunk = str_pad($chunk, 5, '0', STR_PAD_RIGHT);
+        $encoded .= $alphabet[bindec($chunk)];
+    }
+
+    return $encoded;
+}
+
+function base32_decode_string(string $input): string
+{
+    $input = strtoupper(preg_replace('/[^A-Z2-7]/', '', $input) ?? '');
+    if ($input === '') {
+        return '';
+    }
+
+    $alphabet = array_flip(str_split(base32_alphabet()));
+    $binary = '';
+
+    foreach (str_split($input) as $character) {
+        if (!isset($alphabet[$character])) {
+            throw new RuntimeException('Invalid authenticator secret.');
+        }
+        $binary .= str_pad(decbin($alphabet[$character]), 5, '0', STR_PAD_LEFT);
+    }
+
+    $bytes = str_split($binary, 8);
+    $decoded = '';
+    foreach ($bytes as $byte) {
+        if (strlen($byte) < 8) {
+            continue;
+        }
+        $decoded .= chr(bindec($byte));
+    }
+
+    return $decoded;
+}
+
+function generate_totp_secret(int $length = 20): string
+{
+    return base32_encode_string(random_bytes($length));
+}
+
+function user_has_totp_enabled(array $user): bool
+{
+    return !empty($user['totp_enabled']) && trim((string) ($user['totp_secret'] ?? '')) !== '';
+}
+
+function user_requires_totp(array $user): bool
+{
+    return in_array((string) ($user['role'] ?? ''), ['dean', 'admin', 'program_chair'], true);
+}
+
+function pending_totp_setup_key(string $username): string
+{
+    return 'pending_totp_setup_' . $username;
+}
+
+function issue_totp_setup_secret(array $user): string
+{
+    $secret = generate_totp_secret();
+    $_SESSION[pending_totp_setup_key((string) $user['username'])] = $secret;
+    return $secret;
+}
+
+function current_totp_setup_secret(array $user): string
+{
+    return (string) ($_SESSION[pending_totp_setup_key((string) $user['username'])] ?? '');
+}
+
+function clear_totp_setup_secret(array $user): void
+{
+    unset($_SESSION[pending_totp_setup_key((string) $user['username'])]);
+}
+
+function totp_provisioning_uri(array $user, string $secret): string
+{
+    $issuer = authenticator_issuer();
+    $label = $issuer . ':' . (string) $user['username'];
+
+    return 'otpauth://totp/' . rawurlencode($label)
+        . '?secret=' . rawurlencode($secret)
+        . '&issuer=' . rawurlencode($issuer)
+        . '&algorithm=SHA1&digits=6&period=30';
+}
+
+function totp_code_for_secret(string $secret, ?int $timestamp = null, int $period = 30, int $digits = 6): string
+{
+    $timestamp ??= time();
+    $counter = (int) floor($timestamp / $period);
+    $secretBytes = base32_decode_string($secret);
+    $counterBytes = pack('N*', 0) . pack('N*', $counter);
+    $hash = hash_hmac('sha1', $counterBytes, $secretBytes, true);
+    $offset = ord(substr($hash, -1)) & 0x0F;
+    $truncated = substr($hash, $offset, 4);
+    $value = unpack('N', $truncated)[1] & 0x7FFFFFFF;
+    $modulo = 10 ** $digits;
+
+    return str_pad((string) ($value % $modulo), $digits, '0', STR_PAD_LEFT);
+}
+
+function verify_totp_code(string $secret, string $code, int $window = 1): bool
+{
+    $code = preg_replace('/\D/', '', $code) ?? '';
+    if ($code === '') {
+        return false;
+    }
+
+    $now = time();
+    for ($offset = -$window; $offset <= $window; $offset++) {
+        $candidate = totp_code_for_secret($secret, $now + ($offset * 30));
+        if (hash_equals($candidate, $code)) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+function pending_login_user_key(): string
+{
+    return 'pending_login_username';
+}
+
+function begin_pending_totp_login(array $user): void
+{
+    $_SESSION[pending_login_user_key()] = (string) $user['username'];
+}
+
+function pending_totp_username(): string
+{
+    return (string) ($_SESSION[pending_login_user_key()] ?? '');
+}
+
+function clear_pending_totp_login(): void
+{
+    unset($_SESSION[pending_login_user_key()]);
+}
+
+function pending_totp_user(): ?array
+{
+    $username = pending_totp_username();
+    if ($username === '') {
+        return null;
+    }
+
+    return find_user_by_username(all_users(), $username);
 }
 
 function csrf_token(): string

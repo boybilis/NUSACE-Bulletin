@@ -19,10 +19,14 @@ CREATE TABLE `users` (
   `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
   `username` VARCHAR(100) NOT NULL,
   `name` VARCHAR(255) NOT NULL,
-  `role` ENUM('dean', 'program_chair') NOT NULL,
+  `role` ENUM('dean', 'admin', 'program_chair') NOT NULL,
   `default_username` VARCHAR(100) NOT NULL,
   `default_password_hash` VARCHAR(255) NOT NULL,
   `password_hash` VARCHAR(255) NOT NULL,
+  `is_locked` TINYINT(1) NOT NULL DEFAULT 0,
+  `totp_secret` VARCHAR(64) NULL,
+  `totp_enabled` TINYINT(1) NOT NULL DEFAULT 0,
+  `totp_enabled_at` DATETIME NULL,
   `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   UNIQUE KEY `uq_users_username` (`username`)
@@ -119,14 +123,15 @@ CREATE TABLE `notice_reactions` (
     ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-INSERT INTO `users` (`id`, `username`, `name`, `role`, `default_username`, `default_password_hash`, `password_hash`) VALUES
-  (1, 'dean', 'SACE Dean', 'dean', 'dean', '$2y$10$N4drRGJT7fJg34Lnfv7VEe1Ql5xlkIh2lY0.3VsYOcHNvhEOs8f/y', '$2y$10$N4drRGJT7fJg34Lnfv7VEe1Ql5xlkIh2lY0.3VsYOcHNvhEOs8f/y'),
-  (2, 'chair.architecture', 'Architecture Program Chair', 'program_chair', 'chair.architecture', '$2y$10$oChZuMBnkJhmuEXdRQyFW.DuRJzLDWUo5ywNLfI.sDaz1GgACUWHy', '$2y$10$oChZuMBnkJhmuEXdRQyFW.DuRJzLDWUo5ywNLfI.sDaz1GgACUWHy'),
-  (3, 'chair.computer-science', 'BS Computer Science Program Chair', 'program_chair', 'chair.computer-science', '$2y$10$oChZuMBnkJhmuEXdRQyFW.DuRJzLDWUo5ywNLfI.sDaz1GgACUWHy', '$2y$10$oChZuMBnkJhmuEXdRQyFW.DuRJzLDWUo5ywNLfI.sDaz1GgACUWHy'),
-  (4, 'chair.information-technology', 'BS Information Technology Program Chair', 'program_chair', 'chair.information-technology', '$2y$10$oChZuMBnkJhmuEXdRQyFW.DuRJzLDWUo5ywNLfI.sDaz1GgACUWHy', '$2y$10$oChZuMBnkJhmuEXdRQyFW.DuRJzLDWUo5ywNLfI.sDaz1GgACUWHy'),
-  (5, 'chair.engineering', 'Engineering Program Chair', 'program_chair', 'chair.engineering', '$2y$10$oChZuMBnkJhmuEXdRQyFW.DuRJzLDWUo5ywNLfI.sDaz1GgACUWHy', '$2y$10$oChZuMBnkJhmuEXdRQyFW.DuRJzLDWUo5ywNLfI.sDaz1GgACUWHy'),
-  (6, 'chair.mma', 'Multimedia Arts Program Chair', 'program_chair', 'chair.mma', '$2y$10$oChZuMBnkJhmuEXdRQyFW.DuRJzLDWUo5ywNLfI.sDaz1GgACUWHy', '$2y$10$oChZuMBnkJhmuEXdRQyFW.DuRJzLDWUo5ywNLfI.sDaz1GgACUWHy'),
-  (7, 'chair.cpe', 'Computer Engineering Program Chair', 'program_chair', 'chair.cpe', '$2y$10$oChZuMBnkJhmuEXdRQyFW.DuRJzLDWUo5ywNLfI.sDaz1GgACUWHy', '$2y$10$oChZuMBnkJhmuEXdRQyFW.DuRJzLDWUo5ywNLfI.sDaz1GgACUWHy');
+INSERT INTO `users` (`id`, `username`, `name`, `role`, `default_username`, `default_password_hash`, `password_hash`, `is_locked`, `totp_secret`, `totp_enabled`, `totp_enabled_at`) VALUES
+  (1, 'dean', 'SACE Dean', 'dean', 'dean', '$2y$10$N4drRGJT7fJg34Lnfv7VEe1Ql5xlkIh2lY0.3VsYOcHNvhEOs8f/y', '$2y$10$N4drRGJT7fJg34Lnfv7VEe1Ql5xlkIh2lY0.3VsYOcHNvhEOs8f/y', 0, NULL, 0, NULL),
+  (2, 'admin.user', 'User Administrator', 'admin', 'admin.user', '$2y$10$lucqMU3EhbYb3TATqJ82QOHNN9ojUPyiGnXAQiC1NtM63K/kgTjZu', '$2y$10$lucqMU3EhbYb3TATqJ82QOHNN9ojUPyiGnXAQiC1NtM63K/kgTjZu', 0, NULL, 0, NULL),
+  (3, 'chair.architecture', 'Architecture Program Chair', 'program_chair', 'chair.architecture', '$2y$10$oChZuMBnkJhmuEXdRQyFW.DuRJzLDWUo5ywNLfI.sDaz1GgACUWHy', '$2y$10$oChZuMBnkJhmuEXdRQyFW.DuRJzLDWUo5ywNLfI.sDaz1GgACUWHy', 0, NULL, 0, NULL),
+  (4, 'chair.computer-science', 'BS Computer Science Program Chair', 'program_chair', 'chair.computer-science', '$2y$10$oChZuMBnkJhmuEXdRQyFW.DuRJzLDWUo5ywNLfI.sDaz1GgACUWHy', '$2y$10$oChZuMBnkJhmuEXdRQyFW.DuRJzLDWUo5ywNLfI.sDaz1GgACUWHy', 0, NULL, 0, NULL),
+  (5, 'chair.information-technology', 'BS Information Technology Program Chair', 'program_chair', 'chair.information-technology', '$2y$10$oChZuMBnkJhmuEXdRQyFW.DuRJzLDWUo5ywNLfI.sDaz1GgACUWHy', '$2y$10$oChZuMBnkJhmuEXdRQyFW.DuRJzLDWUo5ywNLfI.sDaz1GgACUWHy', 0, NULL, 0, NULL),
+  (6, 'chair.engineering', 'Engineering Program Chair', 'program_chair', 'chair.engineering', '$2y$10$oChZuMBnkJhmuEXdRQyFW.DuRJzLDWUo5ywNLfI.sDaz1GgACUWHy', '$2y$10$oChZuMBnkJhmuEXdRQyFW.DuRJzLDWUo5ywNLfI.sDaz1GgACUWHy', 0, NULL, 0, NULL),
+  (7, 'chair.mma', 'Multimedia Arts Program Chair', 'program_chair', 'chair.mma', '$2y$10$oChZuMBnkJhmuEXdRQyFW.DuRJzLDWUo5ywNLfI.sDaz1GgACUWHy', '$2y$10$oChZuMBnkJhmuEXdRQyFW.DuRJzLDWUo5ywNLfI.sDaz1GgACUWHy', 0, NULL, 0, NULL),
+  (8, 'chair.cpe', 'Computer Engineering Program Chair', 'program_chair', 'chair.cpe', '$2y$10$oChZuMBnkJhmuEXdRQyFW.DuRJzLDWUo5ywNLfI.sDaz1GgACUWHy', '$2y$10$oChZuMBnkJhmuEXdRQyFW.DuRJzLDWUo5ywNLfI.sDaz1GgACUWHy', 0, NULL, 0, NULL);
 
 INSERT INTO `user_boards` (`user_id`, `board_id`, `sort_order`) VALUES
   (1, 'sace', 0),
@@ -136,12 +141,12 @@ INSERT INTO `user_boards` (`user_id`, `board_id`, `sort_order`) VALUES
   (1, 'engineering', 4),
   (1, 'mma', 5),
   (1, 'cpe', 6),
-  (2, 'architecture', 0),
-  (3, 'computer-science', 0),
-  (4, 'information-technology', 0),
-  (5, 'engineering', 0),
-  (6, 'mma', 0),
-  (7, 'cpe', 0);
+  (3, 'architecture', 0),
+  (4, 'computer-science', 0),
+  (5, 'information-technology', 0),
+  (6, 'engineering', 0),
+  (7, 'mma', 0),
+  (8, 'cpe', 0);
 
 INSERT INTO `notices` (
   `id`, `board_id`, `category`, `audience`, `title`, `notice_date`, `visible_from`, `visible_until`,

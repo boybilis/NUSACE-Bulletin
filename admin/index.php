@@ -8,11 +8,18 @@ require_login();
 
 $user = current_user();
 $boardCatalog = board_catalog();
+$roleOptions = role_options();
 $noticeCategories = notice_categories();
+$canManageUsers = can_manage_users($user);
+$canManageNoticeModule = can_manage_notice_module($user);
 $availableBoards = accessible_boards($user);
 $allNotices = all_notices();
 $allUsers = all_users();
 $today = today_ymd();
+$totpRequired = user_requires_totp($user);
+$totpEnabled = user_has_totp_enabled($user);
+$totpSetupSecret = current_totp_setup_secret($user);
+
 $formNotice = [
     'id' => '',
     'board_id' => array_key_first($availableBoards) ?: 'sace',
@@ -30,10 +37,26 @@ $formNotice = [
     'created_by' => (string) $user['username'],
     'created_by_name' => (string) $user['name'],
 ];
+
+$managedUserForm = [
+    'original_username' => '',
+    'username' => '',
+    'name' => '',
+    'role' => 'program_chair',
+    'board_id' => '',
+    'default_username' => '',
+    'default_password' => '',
+    'login_password' => '',
+    'is_locked' => false,
+];
+
 $editing = false;
+$editingManagedUser = false;
 $error = '';
 $success = '';
 $accountSuccess = '';
+$userSuccess = '';
+$totpSuccess = '';
 $uploadedAttachmentForCleanup = null;
 
 try {
@@ -41,7 +64,59 @@ try {
         verify_csrf();
         $action = $_POST['action'] ?? '';
 
+        if ($totpRequired && !$totpEnabled && !in_array($action, ['start_totp_setup', 'confirm_totp_setup', 'reset_own_totp', 'update_account'], true)) {
+            throw new RuntimeException('Complete authenticator setup before using the admin dashboard.');
+        }
+
+        if ($action === 'start_totp_setup') {
+            $totpSetupSecret = issue_totp_setup_secret($user);
+            header('Location: index.php');
+            exit;
+        }
+
+        if ($action === 'confirm_totp_setup') {
+            $totpSetupSecret = current_totp_setup_secret($user);
+            if ($totpSetupSecret === '') {
+                throw new RuntimeException('Start 2FA setup first.');
+            }
+
+            $verificationCode = trim((string) ($_POST['totp_code'] ?? ''));
+            if (!verify_totp_code($totpSetupSecret, $verificationCode)) {
+                throw new RuntimeException('Invalid authenticator code. Please try again.');
+            }
+
+            mutate_users(function (array $users) use ($user, $totpSetupSecret): array {
+                foreach ($users as $index => $record) {
+                    if (($record['username'] ?? '') !== ($user['username'] ?? '')) {
+                        continue;
+                    }
+
+                    $users[$index]['totp_secret'] = $totpSetupSecret;
+                    $users[$index]['totp_enabled'] = true;
+                    $users[$index]['totp_enabled_at'] = gmdate('c');
+                    return $users;
+                }
+
+                throw new RuntimeException('Unable to update authenticator settings.');
+            });
+
+            clear_totp_setup_secret($user);
+            $refreshedUsers = all_users();
+            $updatedRecord = find_user_by_username($refreshedUsers, (string) $user['username']);
+            if ($updatedRecord !== null) {
+                login_user($updatedRecord);
+                $user = current_user();
+            }
+
+            header('Location: index.php?totp_success=Authenticator+enabled');
+            exit;
+        }
+
         if ($action === 'save_notice') {
+            if (!$canManageNoticeModule) {
+                throw new RuntimeException('You do not have access to notice publishing.');
+            }
+
             $noticeId = trim((string) ($_POST['notice_id'] ?? ''));
             $boardId = trim((string) ($_POST['board_id'] ?? ''));
             $existingNotice = $noticeId !== '' ? find_notice_by_id($allNotices, $noticeId) : null;
@@ -105,10 +180,9 @@ try {
             }
 
             $originalUpdatedAt = trim((string) ($_POST['original_updated_at'] ?? ''));
-
             $attachmentToDeleteAfterSave = null;
 
-            mutate_notices(function (array $notices) use ($payload, $user, $originalUpdatedAt, $existingAttachment, $attachment, &$attachmentToDeleteAfterSave): array {
+            mutate_notices(function (array $notices) use ($payload, $user, $originalUpdatedAt, $attachment, &$attachmentToDeleteAfterSave): array {
                 $updated = false;
 
                 foreach ($notices as $index => $notice) {
@@ -206,19 +280,185 @@ try {
             exit;
         }
 
-        if ($action === 'reset_program_chair_account') {
-            if (($user['role'] ?? '') !== 'dean') {
-                throw new RuntimeException('Only the Dean can reset program chair accounts.');
+        if ($action === 'reset_own_totp') {
+            $currentPassword = (string) ($_POST['current_password_for_totp'] ?? '');
+
+            $freshUsers = all_users();
+            $currentRecord = find_user_by_username($freshUsers, (string) $user['username']);
+            if ($currentRecord === null) {
+                throw new RuntimeException('Unable to locate your account.');
+            }
+
+            if (!password_verify($currentPassword, (string) $currentRecord['password_hash'])) {
+                throw new RuntimeException('Current password is incorrect.');
+            }
+
+            mutate_users(function (array $users) use ($user): array {
+                foreach ($users as $index => $record) {
+                    if (($record['username'] ?? '') !== ($user['username'] ?? '')) {
+                        continue;
+                    }
+
+                    $users[$index]['totp_secret'] = '';
+                    $users[$index]['totp_enabled'] = false;
+                    $users[$index]['totp_enabled_at'] = '';
+                    return $users;
+                }
+
+                throw new RuntimeException('Unable to reset authenticator settings.');
+            });
+
+            clear_totp_setup_secret($user);
+            $refreshedUsers = all_users();
+            $updatedRecord = find_user_by_username($refreshedUsers, (string) $user['username']);
+            if ($updatedRecord !== null) {
+                login_user($updatedRecord);
+                $user = current_user();
+            }
+
+            header('Location: index.php?totp_success=Authenticator+reset');
+            exit;
+        }
+
+        if ($action === 'save_managed_user') {
+            if (!$canManageUsers) {
+                throw new RuntimeException('You do not have access to user management.');
+            }
+
+            $originalUsername = trim((string) ($_POST['original_username'] ?? ''));
+            $username = trim((string) ($_POST['username'] ?? ''));
+            $name = trim((string) ($_POST['name'] ?? ''));
+            $role = trim((string) ($_POST['role'] ?? 'program_chair'));
+            $boardId = trim((string) ($_POST['board_id'] ?? ''));
+            $defaultUsername = trim((string) ($_POST['default_username'] ?? ''));
+            $defaultPassword = (string) ($_POST['default_password'] ?? '');
+            $loginPassword = (string) ($_POST['login_password'] ?? '');
+            $isLocked = isset($_POST['is_locked']);
+            $isCreating = $originalUsername === '';
+
+            if ($username === '' || $name === '') {
+                throw new RuntimeException('Username and name are required.');
+            }
+
+            if (!isset($roleOptions[$role])) {
+                throw new RuntimeException('Please select a valid user role.');
+            }
+
+            if ($defaultUsername === '') {
+                $defaultUsername = $username;
+            }
+
+            if (!$isCreating && $originalUsername === (string) $user['username']) {
+                throw new RuntimeException('Use Account Settings to update your own account.');
+            }
+
+            $boardIds = board_ids_for_role($role, $boardId !== '' ? [$boardId] : []);
+            if ($role === 'program_chair' && $boardIds === []) {
+                throw new RuntimeException('Program chair accounts must be assigned to a department.');
+            }
+
+            if ($isCreating && $defaultPassword === '') {
+                throw new RuntimeException('Default password is required when creating a user.');
+            }
+
+            $renamedFromUsername = null;
+
+            mutate_users(function (array $users) use (
+                $originalUsername,
+                $username,
+                $name,
+                $role,
+                $defaultUsername,
+                $defaultPassword,
+                $loginPassword,
+                $isLocked,
+                $boardIds,
+                $isCreating,
+                &$renamedFromUsername
+            ): array {
+                foreach ($users as $record) {
+                    $recordUsername = (string) ($record['username'] ?? '');
+                    if ($recordUsername === $originalUsername) {
+                        continue;
+                    }
+
+                    if ($recordUsername === $username) {
+                        throw new RuntimeException('That username is already in use.');
+                    }
+
+                    if ($recordUsername === $defaultUsername) {
+                        throw new RuntimeException('That default username is already in use.');
+                    }
+                }
+
+                if ($isCreating) {
+                    $users[] = [
+                        'username' => $username,
+                        'name' => $name,
+                        'role' => $role,
+                        'default_username' => $defaultUsername,
+                        'default_password_hash' => password_hash($defaultPassword, PASSWORD_DEFAULT),
+                        'password_hash' => password_hash($loginPassword !== '' ? $loginPassword : $defaultPassword, PASSWORD_DEFAULT),
+                        'is_locked' => $isLocked,
+                        'totp_secret' => '',
+                        'totp_enabled' => false,
+                        'totp_enabled_at' => '',
+                        'board_ids' => $boardIds,
+                    ];
+
+                    return $users;
+                }
+
+                foreach ($users as $index => $record) {
+                    if (($record['username'] ?? '') !== $originalUsername) {
+                        continue;
+                    }
+
+                    $renamedFromUsername = $originalUsername !== $username ? $originalUsername : null;
+                    $users[$index]['username'] = $username;
+                    $users[$index]['name'] = $name;
+                    $users[$index]['role'] = $role;
+                    $users[$index]['default_username'] = $defaultUsername;
+                    $users[$index]['is_locked'] = $isLocked;
+                    $users[$index]['board_ids'] = $boardIds;
+
+                    if ($defaultPassword !== '') {
+                        $users[$index]['default_password_hash'] = password_hash($defaultPassword, PASSWORD_DEFAULT);
+                    }
+
+                    if ($loginPassword !== '') {
+                        $users[$index]['password_hash'] = password_hash($loginPassword, PASSWORD_DEFAULT);
+                    }
+
+                    return $users;
+                }
+
+                throw new RuntimeException('Unable to locate the selected user.');
+            });
+
+            if ($renamedFromUsername !== null) {
+                update_notice_owner_references($renamedFromUsername, $username, $name);
+            } elseif (!$isCreating) {
+                update_notice_owner_references($username, $username, $name);
+            }
+
+            header('Location: index.php?user_success=' . urlencode($isCreating ? 'User created' : 'User updated'));
+            exit;
+        }
+
+        if ($action === 'reset_managed_user_account') {
+            if (!$canManageUsers) {
+                throw new RuntimeException('You do not have access to user management.');
             }
 
             $targetUsername = trim((string) ($_POST['target_username'] ?? ''));
-            $targetRecord = find_user_by_username($allUsers, $targetUsername);
-            if ($targetRecord === null) {
-                throw new RuntimeException('Program chair account not found.');
+            if ($targetUsername === '' || $targetUsername === (string) $user['username']) {
+                throw new RuntimeException('You cannot reset your own account here.');
             }
 
-            if (($targetRecord['role'] ?? '') !== 'program_chair') {
-                throw new RuntimeException('Only program chair accounts can be reset here.');
+            $targetRecord = find_user_by_username($allUsers, $targetUsername);
+            if ($targetRecord === null) {
+                throw new RuntimeException('User account not found.');
             }
 
             $defaultUsername = (string) ($targetRecord['default_username'] ?? $targetRecord['username']);
@@ -226,7 +466,7 @@ try {
             $targetName = (string) ($targetRecord['name'] ?? '');
 
             mutate_users(function (array $users) use ($targetUsername, $defaultUsername, $defaultPasswordHash): array {
-                foreach ($users as $index => $record) {
+                foreach ($users as $record) {
                     if (($record['username'] ?? '') === $defaultUsername && ($record['username'] ?? '') !== $targetUsername) {
                         throw new RuntimeException('The default username is currently used by another account.');
                     }
@@ -239,6 +479,7 @@ try {
 
                     $users[$index]['username'] = $defaultUsername;
                     $users[$index]['password_hash'] = $defaultPasswordHash;
+                    $users[$index]['is_locked'] = false;
                     return $users;
                 }
 
@@ -246,11 +487,71 @@ try {
             });
 
             update_notice_owner_references($targetUsername, $defaultUsername, $targetName);
-            header('Location: index.php?account_success=Program chair account reset');
+            header('Location: index.php?user_success=User account reset');
+            exit;
+        }
+
+        if ($action === 'toggle_managed_user_lock') {
+            if (!$canManageUsers) {
+                throw new RuntimeException('You do not have access to user management.');
+            }
+
+            $targetUsername = trim((string) ($_POST['target_username'] ?? ''));
+            if ($targetUsername === '' || $targetUsername === (string) $user['username']) {
+                throw new RuntimeException('You cannot lock or unlock your own account here.');
+            }
+
+            mutate_users(function (array $users) use ($targetUsername): array {
+                foreach ($users as $index => $record) {
+                    if (($record['username'] ?? '') !== $targetUsername) {
+                        continue;
+                    }
+
+                    $users[$index]['is_locked'] = !empty($record['is_locked']) ? false : true;
+                    return $users;
+                }
+
+                throw new RuntimeException('User account not found.');
+            });
+
+            header('Location: index.php?user_success=User lock status updated');
+            exit;
+        }
+
+        if ($action === 'reset_managed_user_totp') {
+            if (!$canManageUsers) {
+                throw new RuntimeException('You do not have access to user management.');
+            }
+
+            $targetUsername = trim((string) ($_POST['target_username'] ?? ''));
+            if ($targetUsername === '' || $targetUsername === (string) $user['username']) {
+                throw new RuntimeException('You cannot reset your own authenticator here.');
+            }
+
+            mutate_users(function (array $users) use ($targetUsername): array {
+                foreach ($users as $index => $record) {
+                    if (($record['username'] ?? '') !== $targetUsername) {
+                        continue;
+                    }
+
+                    $users[$index]['totp_secret'] = '';
+                    $users[$index]['totp_enabled'] = false;
+                    $users[$index]['totp_enabled_at'] = '';
+                    return $users;
+                }
+
+                throw new RuntimeException('User account not found.');
+            });
+
+            header('Location: index.php?user_success=User authenticator reset');
             exit;
         }
 
         if ($action === 'delete_notice') {
+            if (!$canManageNoticeModule) {
+                throw new RuntimeException('You do not have access to notice publishing.');
+            }
+
             $noticeId = trim((string) ($_POST['notice_id'] ?? ''));
 
             $target = find_notice_by_id($allNotices, $noticeId);
@@ -290,7 +591,7 @@ try {
     $error = $exception->getMessage();
 }
 
-if (isset($_GET['edit'])) {
+if ($canManageNoticeModule && isset($_GET['edit'])) {
     $editing = true;
     $notice = find_notice_by_id($allNotices, (string) $_GET['edit']);
     if ($notice !== null && can_edit_notice($user, $notice)) {
@@ -301,15 +602,52 @@ if (isset($_GET['edit'])) {
     }
 }
 
+if ($canManageUsers && isset($_GET['user_edit'])) {
+    $editingManagedUser = true;
+    $managedRecord = find_user_by_username($allUsers, trim((string) $_GET['user_edit']));
+    if ($managedRecord !== null && (string) $managedRecord['username'] !== (string) $user['username']) {
+        $managedUserForm = [
+            'original_username' => (string) $managedRecord['username'],
+            'username' => (string) $managedRecord['username'],
+            'name' => (string) $managedRecord['name'],
+            'role' => (string) $managedRecord['role'],
+            'board_id' => primary_board_id_for_user($managedRecord),
+            'default_username' => (string) ($managedRecord['default_username'] ?? $managedRecord['username']),
+            'default_password' => '',
+            'login_password' => '',
+            'is_locked' => !empty($managedRecord['is_locked']),
+        ];
+    } else {
+        $error = 'Unable to edit the selected user.';
+        $editingManagedUser = false;
+    }
+}
+
 $success = trim((string) ($_GET['success'] ?? ''));
 $accountSuccess = trim((string) ($_GET['account_success'] ?? ''));
+$userSuccess = trim((string) ($_GET['user_success'] ?? ''));
+$totpSuccess = trim((string) ($_GET['totp_success'] ?? ''));
+$totpEnabled = user_has_totp_enabled($user);
+$totpSetupSecret = current_totp_setup_secret($user);
 
 $visibleNotices = array_values(array_filter(
     $allNotices,
     static fn (array $notice): bool => can_edit_notice($user, $notice)
 ));
-
 sort_notices($visibleNotices);
+
+$managedUsers = $allUsers;
+usort($managedUsers, static function (array $left, array $right): int {
+    $roleOrder = ['dean' => 0, 'admin' => 1, 'program_chair' => 2];
+    $leftRole = $roleOrder[$left['role'] ?? 'program_chair'] ?? 99;
+    $rightRole = $roleOrder[$right['role'] ?? 'program_chair'] ?? 99;
+
+    if ($leftRole !== $rightRole) {
+        return $leftRole <=> $rightRole;
+    }
+
+    return strcasecmp((string) ($left['name'] ?? ''), (string) ($right['name'] ?? ''));
+});
 
 $deanFeedbackByBoard = [];
 if (($user['role'] ?? '') === 'dean') {
@@ -326,7 +664,7 @@ if (($user['role'] ?? '') === 'dean') {
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Admin Dashboard | NU LIPA SACE</title>
-  <link rel="stylesheet" href="../styles.css?v=20260602-admin11">
+  <link rel="stylesheet" href="../styles.css?v=20260726-admin-users1">
 </head>
 <body class="admin-body">
   <main class="admin-shell">
@@ -335,9 +673,13 @@ if (($user['role'] ?? '') === 'dean') {
         <p class="eyebrow">Bulletin Admin</p>
         <h1>Welcome, <?= e((string) $user['name']) ?></h1>
         <p class="admin-intro">
-          <?= $user['role'] === 'dean'
-              ? 'Dean access: publish and manage official announcements and notices across all academic bulletin boards, including the NULIPA-SACE School board.'
-              : 'Program chair access: publish notices to your assigned academic board and manage only the notices you personally created.' ?>
+          <?php if (($user['role'] ?? '') === 'dean'): ?>
+            Dean access: publish and manage official announcements across all bulletin boards, and manage administrator accounts.
+          <?php elseif (($user['role'] ?? '') === 'admin'): ?>
+            Admin access: manage user accounts, departments, resets, and lock status.
+          <?php else: ?>
+            Program chair access: publish notices to your assigned academic board and manage only the notices you personally created.
+          <?php endif; ?>
         </p>
       </div>
       <div class="admin-actions">
@@ -358,151 +700,165 @@ if (($user['role'] ?? '') === 'dean') {
       <p class="admin-success"><?= e($accountSuccess) ?></p>
     <?php endif; ?>
 
-    <section class="admin-grid">
-      <article class="admin-editor glass-panel">
-        <p class="eyebrow"><?= $editing ? 'Edit Notice' : 'Create Notice' ?></p>
-        <h2><?= $editing ? 'Update official bulletin content' : 'Publish a new official bulletin notice' ?></h2>
-        <form method="post" class="admin-form-stack" enctype="multipart/form-data">
-          <input type="hidden" name="csrf_token" value="<?= e(csrf_token()) ?>">
-          <input type="hidden" name="action" value="save_notice">
-          <input type="hidden" name="notice_id" value="<?= e((string) $formNotice['id']) ?>">
-          <input type="hidden" name="original_updated_at" value="<?= e((string) ($formNotice['updated_at'] ?? '')) ?>">
+    <?php if ($userSuccess !== ''): ?>
+      <p class="admin-success"><?= e($userSuccess) ?></p>
+    <?php endif; ?>
 
-          <label class="admin-field">
-            <span>Board</span>
-            <select name="board_id" required>
-              <?php foreach ($availableBoards as $board): ?>
-                <option value="<?= e($board['id']) ?>" <?= $formNotice['board_id'] === $board['id'] ? 'selected' : '' ?>>
-                  <?= e($board['name']) ?>
-                </option>
-              <?php endforeach; ?>
-            </select>
-          </label>
+    <?php if ($totpSuccess !== ''): ?>
+      <p class="admin-success"><?= e($totpSuccess) ?></p>
+    <?php endif; ?>
 
-          <label class="admin-field">
-            <span>Category</span>
-            <select name="category" required>
-              <option value="" disabled <?= $formNotice['category'] === '' ? 'selected' : '' ?>>Select a category</option>
-              <?php foreach ($noticeCategories as $category): ?>
-                <option value="<?= e($category) ?>" <?= $formNotice['category'] === $category ? 'selected' : '' ?>>
-                  <?= e($category) ?>
-                </option>
-              <?php endforeach; ?>
-              <?php if ($formNotice['category'] !== '' && !in_array($formNotice['category'], $noticeCategories, true)): ?>
-                <option value="<?= e((string) $formNotice['category']) ?>" selected>
-                  <?= e((string) $formNotice['category']) ?> (Legacy)
-                </option>
-              <?php endif; ?>
-            </select>
-          </label>
+    <?php if ($totpRequired && !$totpEnabled): ?>
+      <p class="admin-alert">Authenticator setup is required before you can use the full dashboard.</p>
+    <?php endif; ?>
 
-          <label class="admin-field">
-            <span>Audience</span>
-            <input type="text" name="audience" value="<?= e((string) $formNotice['audience']) ?>" required>
-          </label>
+    <?php if ($canManageNoticeModule && (!$totpRequired || $totpEnabled)): ?>
+      <section class="admin-grid">
+        <article class="admin-editor glass-panel">
+          <p class="eyebrow"><?= $editing ? 'Edit Notice' : 'Create Notice' ?></p>
+          <h2><?= $editing ? 'Update official bulletin content' : 'Publish a new official bulletin notice' ?></h2>
+          <form method="post" class="admin-form-stack" enctype="multipart/form-data">
+            <input type="hidden" name="csrf_token" value="<?= e(csrf_token()) ?>">
+            <input type="hidden" name="action" value="save_notice">
+            <input type="hidden" name="notice_id" value="<?= e((string) $formNotice['id']) ?>">
+            <input type="hidden" name="original_updated_at" value="<?= e((string) ($formNotice['updated_at'] ?? '')) ?>">
 
-          <label class="admin-field">
-            <span>Title</span>
-            <input type="text" name="title" value="<?= e((string) $formNotice['title']) ?>" required>
-          </label>
-
-          <label class="admin-field">
-            <span>Date</span>
-            <input type="date" name="date" value="<?= e((string) $formNotice['date']) ?>" required>
-          </label>
-
-          <label class="admin-field">
-            <span>Visible From</span>
-            <input type="date" name="visible_from" value="<?= e((string) $formNotice['visible_from']) ?>" required>
-            <small class="admin-field-help">The notice becomes visible on this date.</small>
-          </label>
-
-          <label class="admin-field">
-            <span>Visible Until</span>
-            <input type="date" name="visible_until" value="<?= e((string) $formNotice['visible_until']) ?>" required>
-            <small class="admin-field-help">The notice is automatically hidden after this date.</small>
-          </label>
-
-          <label class="admin-field">
-            <span>Notice text</span>
-            <textarea name="text" rows="6" required><?= e((string) $formNotice['text']) ?></textarea>
-          </label>
-
-          <label class="admin-field">
-            <span>Attachment</span>
-            <input type="file" name="attachment" accept=".pdf,image/png,image/jpeg,image/gif,image/webp">
-            <small class="admin-field-help">Optional. Attach only one file per notice: one PDF or one image, up to 10 MB.</small>
-          </label>
-
-          <?php if (!empty($formNotice['attachment'])): ?>
-            <div class="admin-attachment-box">
-              <p class="admin-notice-meta">Current attachment: <a class="secondary-link secondary-link-inline" href="../<?= e((string) $formNotice['attachment']['path']) ?>" target="_blank" rel="noopener"><?= e((string) $formNotice['attachment']['name']) ?></a></p>
-              <label class="admin-check">
-                <input type="checkbox" name="remove_attachment" value="1">
-                <span>Remove the current attachment when saving this notice</span>
-              </label>
-            </div>
-          <?php endif; ?>
-
-          <label class="admin-field">
-            <span>Tags</span>
-            <input type="text" name="tag" value="<?= e(implode(', ', $formNotice['tags'] ?? [])) ?>" placeholder="exam, faculty, students" required>
-            <small class="admin-field-help">Separate tags with commas. Example: <code>examination, faculty, students</code></small>
-          </label>
-
-          <label class="admin-check">
-            <input type="checkbox" name="pinned" value="1" <?= !empty($formNotice['pinned']) ? 'checked' : '' ?>>
-            <span>Pin this notice so it appears before regular notices</span>
-          </label>
-
-          <div class="admin-actions">
-            <button type="submit" class="install-btn admin-submit"><?= $editing ? 'Update Notice' : 'Publish Notice' ?></button>
-            <?php if ($editing): ?>
-              <a class="secondary-link" href="index.php">Cancel</a>
-            <?php endif; ?>
-          </div>
-        </form>
-      </article>
-
-      <article class="admin-list glass-panel">
-        <p class="eyebrow">Your Notices</p>
-        <h2>Official bulletin notices you created</h2>
-        <div class="admin-notice-list">
-          <?php foreach ($visibleNotices as $notice): ?>
-            <article class="admin-notice-item">
-              <div class="admin-notice-head">
-                <div>
-                  <p class="admin-notice-board"><?= e($boardCatalog[$notice['board_id']]['name'] ?? $notice['board_id']) ?></p>
-                  <h3><?= e((string) $notice['title']) ?></h3>
-                </div>
-                <p class="notice-date"><?= e((string) $notice['date']) ?></p>
-              </div>
-              <p class="admin-notice-meta"><?= e((string) $notice['category']) ?> | <?= e((string) $notice['audience']) ?> | <?= ucfirst(notice_scope_status($notice, $today)) ?><?= !empty($notice['pinned']) ? ' | Pinned' : '' ?></p>
-              <p class="admin-notice-meta">Owner: <?= e((string) ($notice['created_by_name'] ?? '')) ?></p>
-              <p class="admin-notice-meta">Visible: <?= e((string) $notice['visible_from']) ?> to <?= e((string) $notice['visible_until']) ?></p>
-              <div class="admin-tag-row">
-                <?php foreach (($notice['tags'] ?? []) as $tag): ?>
-                  <span class="tag-chip"><?= e((string) $tag) ?></span>
+            <label class="admin-field">
+              <span>Board</span>
+              <select name="board_id" required>
+                <?php foreach ($availableBoards as $board): ?>
+                  <option value="<?= e($board['id']) ?>" <?= $formNotice['board_id'] === $board['id'] ? 'selected' : '' ?>>
+                    <?= e($board['name']) ?>
+                  </option>
                 <?php endforeach; ?>
+              </select>
+            </label>
+
+            <label class="admin-field">
+              <span>Category</span>
+              <select name="category" required>
+                <option value="" disabled <?= $formNotice['category'] === '' ? 'selected' : '' ?>>Select a category</option>
+                <?php foreach ($noticeCategories as $category): ?>
+                  <option value="<?= e($category) ?>" <?= $formNotice['category'] === $category ? 'selected' : '' ?>>
+                    <?= e($category) ?>
+                  </option>
+                <?php endforeach; ?>
+                <?php if ($formNotice['category'] !== '' && !in_array($formNotice['category'], $noticeCategories, true)): ?>
+                  <option value="<?= e((string) $formNotice['category']) ?>" selected>
+                    <?= e((string) $formNotice['category']) ?> (Legacy)
+                  </option>
+                <?php endif; ?>
+              </select>
+            </label>
+
+            <label class="admin-field">
+              <span>Audience</span>
+              <input type="text" name="audience" value="<?= e((string) $formNotice['audience']) ?>" required>
+            </label>
+
+            <label class="admin-field">
+              <span>Title</span>
+              <input type="text" name="title" value="<?= e((string) $formNotice['title']) ?>" required>
+            </label>
+
+            <label class="admin-field">
+              <span>Date</span>
+              <input type="date" name="date" value="<?= e((string) $formNotice['date']) ?>" required>
+            </label>
+
+            <label class="admin-field">
+              <span>Visible From</span>
+              <input type="date" name="visible_from" value="<?= e((string) $formNotice['visible_from']) ?>" required>
+              <small class="admin-field-help">The notice becomes visible on this date.</small>
+            </label>
+
+            <label class="admin-field">
+              <span>Visible Until</span>
+              <input type="date" name="visible_until" value="<?= e((string) $formNotice['visible_until']) ?>" required>
+              <small class="admin-field-help">The notice is automatically hidden after this date.</small>
+            </label>
+
+            <label class="admin-field">
+              <span>Notice text</span>
+              <textarea name="text" rows="6" required><?= e((string) $formNotice['text']) ?></textarea>
+            </label>
+
+            <label class="admin-field">
+              <span>Attachment</span>
+              <input type="file" name="attachment" accept=".pdf,image/png,image/jpeg,image/gif,image/webp">
+              <small class="admin-field-help">Optional. Attach only one file per notice: one PDF or one image, up to 10 MB.</small>
+            </label>
+
+            <?php if (!empty($formNotice['attachment'])): ?>
+              <div class="admin-attachment-box">
+                <p class="admin-notice-meta">Current attachment: <a class="secondary-link secondary-link-inline" href="../<?= e((string) $formNotice['attachment']['path']) ?>" target="_blank" rel="noopener"><?= e((string) $formNotice['attachment']['name']) ?></a></p>
+                <label class="admin-check">
+                  <input type="checkbox" name="remove_attachment" value="1">
+                  <span>Remove the current attachment when saving this notice</span>
+                </label>
               </div>
-              <p class="admin-notice-body"><?= nl2br(e((string) $notice['text'])) ?></p>
-              <?php if (!empty($notice['attachment'])): ?>
-                <p class="admin-notice-meta">Attachment: <a class="secondary-link secondary-link-inline" href="../<?= e((string) $notice['attachment']['path']) ?>" target="_blank" rel="noopener"><?= e((string) $notice['attachment']['name']) ?></a></p>
+            <?php endif; ?>
+
+            <label class="admin-field">
+              <span>Tags</span>
+              <input type="text" name="tag" value="<?= e(implode(', ', $formNotice['tags'] ?? [])) ?>" placeholder="exam, faculty, students" required>
+              <small class="admin-field-help">Separate tags with commas. Example: <code>examination, faculty, students</code></small>
+            </label>
+
+            <label class="admin-check">
+              <input type="checkbox" name="pinned" value="1" <?= !empty($formNotice['pinned']) ? 'checked' : '' ?>>
+              <span>Pin this notice so it appears before regular notices</span>
+            </label>
+
+            <div class="admin-actions">
+              <button type="submit" class="install-btn admin-submit"><?= $editing ? 'Update Notice' : 'Publish Notice' ?></button>
+              <?php if ($editing): ?>
+                <a class="secondary-link" href="index.php">Cancel</a>
               <?php endif; ?>
-              <div class="admin-actions">
-                <a class="secondary-link" href="index.php?edit=<?= urlencode((string) $notice['id']) ?>">Edit</a>
-                <form method="post" class="admin-inline-form" onsubmit="return confirm('Delete this notice?');">
-                  <input type="hidden" name="csrf_token" value="<?= e(csrf_token()) ?>">
-                  <input type="hidden" name="action" value="delete_notice">
-                  <input type="hidden" name="notice_id" value="<?= e((string) $notice['id']) ?>">
-                  <button type="submit" class="admin-delete-btn">Delete</button>
-                </form>
-              </div>
-            </article>
-          <?php endforeach; ?>
-        </div>
-      </article>
-    </section>
+            </div>
+          </form>
+        </article>
+
+        <article class="admin-list glass-panel">
+          <p class="eyebrow">Your Notices</p>
+          <h2>Official bulletin notices you created</h2>
+          <div class="admin-notice-list">
+            <?php foreach ($visibleNotices as $notice): ?>
+              <article class="admin-notice-item">
+                <div class="admin-notice-head">
+                  <div>
+                    <p class="admin-notice-board"><?= e($boardCatalog[$notice['board_id']]['name'] ?? $notice['board_id']) ?></p>
+                    <h3><?= e((string) $notice['title']) ?></h3>
+                  </div>
+                  <p class="notice-date"><?= e((string) $notice['date']) ?></p>
+                </div>
+                <p class="admin-notice-meta"><?= e((string) $notice['category']) ?> | <?= e((string) $notice['audience']) ?> | <?= ucfirst(notice_scope_status($notice, $today)) ?><?= !empty($notice['pinned']) ? ' | Pinned' : '' ?></p>
+                <p class="admin-notice-meta">Owner: <?= e((string) ($notice['created_by_name'] ?? '')) ?></p>
+                <p class="admin-notice-meta">Visible: <?= e((string) $notice['visible_from']) ?> to <?= e((string) $notice['visible_until']) ?></p>
+                <div class="admin-tag-row">
+                  <?php foreach (($notice['tags'] ?? []) as $tag): ?>
+                    <span class="tag-chip"><?= e((string) $tag) ?></span>
+                  <?php endforeach; ?>
+                </div>
+                <p class="admin-notice-body"><?= nl2br(e((string) $notice['text'])) ?></p>
+                <?php if (!empty($notice['attachment'])): ?>
+                  <p class="admin-notice-meta">Attachment: <a class="secondary-link secondary-link-inline" href="../<?= e((string) $notice['attachment']['path']) ?>" target="_blank" rel="noopener"><?= e((string) $notice['attachment']['name']) ?></a></p>
+                <?php endif; ?>
+                <div class="admin-actions">
+                  <a class="secondary-link" href="index.php?edit=<?= urlencode((string) $notice['id']) ?>">Edit</a>
+                  <form method="post" class="admin-inline-form" onsubmit="return confirm('Delete this notice?');">
+                    <input type="hidden" name="csrf_token" value="<?= e(csrf_token()) ?>">
+                    <input type="hidden" name="action" value="delete_notice">
+                    <input type="hidden" name="notice_id" value="<?= e((string) $notice['id']) ?>">
+                    <button type="submit" class="admin-delete-btn">Delete</button>
+                  </form>
+                </div>
+              </article>
+            <?php endforeach; ?>
+          </div>
+        </article>
+      </section>
+    <?php endif; ?>
 
     <section class="admin-grid">
       <article class="admin-editor glass-panel">
@@ -537,46 +893,174 @@ if (($user['role'] ?? '') === 'dean') {
             <button type="submit" class="install-btn admin-submit">Update Account</button>
           </div>
         </form>
+
+        <div class="admin-feedback-block" style="margin-top: 24px;">
+          <p class="eyebrow">Authenticator 2FA</p>
+          <?php if ($totpEnabled): ?>
+            <p class="admin-notice-meta">Status: Enabled<?= !empty($user['totp_enabled_at']) ? ' | Activated ' . e(format_datetime_label((string) $user['totp_enabled_at'])) : '' ?></p>
+            <form method="post" class="admin-form-stack" style="margin-top: 12px;">
+              <input type="hidden" name="csrf_token" value="<?= e(csrf_token()) ?>">
+              <input type="hidden" name="action" value="reset_own_totp">
+              <label class="admin-field">
+                <span>Current Password</span>
+                <input type="password" name="current_password_for_totp" required>
+                <small class="admin-field-help">Reset your authenticator if you changed phones or need to pair a new device.</small>
+              </label>
+              <div class="admin-actions">
+                <button type="submit" class="admin-delete-btn" onclick="return confirm('Reset your authenticator setup? You will need to enroll again.');">Reset Authenticator</button>
+              </div>
+            </form>
+          <?php else: ?>
+            <?php if ($totpSetupSecret === ''): ?>
+              <p class="admin-notice-meta">No authenticator is configured yet.</p>
+              <form method="post" class="admin-inline-form" style="margin-top: 12px;">
+                <input type="hidden" name="csrf_token" value="<?= e(csrf_token()) ?>">
+                <input type="hidden" name="action" value="start_totp_setup">
+                <button type="submit" class="install-btn admin-submit">Start Authenticator Setup</button>
+              </form>
+            <?php else: ?>
+              <p class="admin-notice-meta">Add this account in Google Authenticator or Microsoft Authenticator using the secret below, then verify one 6-digit code.</p>
+              <label class="admin-field">
+                <span>Secret Key</span>
+                <input type="text" value="<?= e($totpSetupSecret) ?>" readonly>
+              </label>
+              <label class="admin-field">
+                <span>Setup URI</span>
+                <textarea rows="3" readonly><?= e(totp_provisioning_uri($user, $totpSetupSecret)) ?></textarea>
+              </label>
+              <form method="post" class="admin-form-stack">
+                <input type="hidden" name="csrf_token" value="<?= e(csrf_token()) ?>">
+                <input type="hidden" name="action" value="confirm_totp_setup">
+                <label class="admin-field">
+                  <span>Authenticator Code</span>
+                  <input type="text" name="totp_code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" required>
+                </label>
+                <div class="admin-actions">
+                  <button type="submit" class="install-btn admin-submit">Enable Authenticator</button>
+                </div>
+              </form>
+            <?php endif; ?>
+          <?php endif; ?>
+        </div>
       </article>
 
-      <?php if (($user['role'] ?? '') === 'dean'): ?>
+      <?php if ($canManageUsers && (!$totpRequired || $totpEnabled)): ?>
         <article class="admin-list glass-panel">
-          <p class="eyebrow">Dean Controls</p>
-          <h2>Reset program chair accounts</h2>
-          <?php if (!empty($deanFeedbackByBoard['sace'])): ?>
-            <div class="admin-feedback-block">
-              <p class="admin-notice-board">NULIPA-SACE School-wide Feedback</p>
-              <?php foreach ($deanFeedbackByBoard['sace'] as $feedback): ?>
-                <article class="admin-feedback-item">
-                  <p class="admin-notice-meta"><?= e(feedback_type_label((string) $feedback['type'])) ?> | <?= e(format_datetime_label((string) $feedback['created_at'])) ?></p>
-                  <p class="admin-notice-meta"><?= !empty($feedback['is_anonymous']) ? 'Anonymous sender' : 'Sender email: ' . e((string) $feedback['email']) ?></p>
-                  <p class="admin-notice-body"><?= nl2br(e((string) $feedback['message'])) ?></p>
-                </article>
-              <?php endforeach; ?>
-            </div>
-          <?php endif; ?>
-          <div class="admin-notice-list">
-            <?php foreach ($allUsers as $account): ?>
-              <?php if (($account['role'] ?? '') !== 'program_chair'): ?>
-                <?php continue; ?>
+          <p class="eyebrow">User Management</p>
+          <h2><?= $editingManagedUser ? 'Edit administrator account' : 'Create and manage administrator accounts' ?></h2>
+          <form method="post" class="admin-form-stack">
+            <input type="hidden" name="csrf_token" value="<?= e(csrf_token()) ?>">
+            <input type="hidden" name="action" value="save_managed_user">
+            <input type="hidden" name="original_username" value="<?= e((string) $managedUserForm['original_username']) ?>">
+
+            <label class="admin-field">
+              <span>Full Name</span>
+              <input type="text" name="name" value="<?= e((string) $managedUserForm['name']) ?>" required>
+            </label>
+
+            <label class="admin-field">
+              <span>Username</span>
+              <input type="text" name="username" value="<?= e((string) $managedUserForm['username']) ?>" required>
+            </label>
+
+            <label class="admin-field">
+              <span>Role</span>
+              <select name="role" required>
+                <?php foreach ($roleOptions as $roleValue => $roleLabel): ?>
+                  <option value="<?= e($roleValue) ?>" <?= $managedUserForm['role'] === $roleValue ? 'selected' : '' ?>>
+                    <?= e($roleLabel) ?>
+                  </option>
+                <?php endforeach; ?>
+              </select>
+            </label>
+
+            <label class="admin-field">
+              <span>Department</span>
+              <select name="board_id">
+                <option value="">No department</option>
+                <?php foreach ($boardCatalog as $board): ?>
+                  <option value="<?= e($board['id']) ?>" <?= $managedUserForm['board_id'] === $board['id'] ? 'selected' : '' ?>>
+                    <?= e($board['name']) ?>
+                  </option>
+                <?php endforeach; ?>
+              </select>
+              <small class="admin-field-help">Required for program chair accounts. Dean gets all departments. Admin gets none.</small>
+            </label>
+
+            <label class="admin-field">
+              <span>Default Username</span>
+              <input type="text" name="default_username" value="<?= e((string) $managedUserForm['default_username']) ?>" required>
+              <small class="admin-field-help">This username is restored when the account is reset.</small>
+            </label>
+
+            <label class="admin-field">
+              <span>Default Password <?= $editingManagedUser ? '(leave blank to keep current)' : '' ?></span>
+              <input type="password" name="default_password" <?= $editingManagedUser ? '' : 'required' ?>>
+            </label>
+
+            <label class="admin-field">
+              <span>Login Password <?= $editingManagedUser ? '(leave blank to keep current)' : '(optional; defaults to the default password)' ?></span>
+              <input type="password" name="login_password">
+            </label>
+
+            <label class="admin-check">
+              <input type="checkbox" name="is_locked" value="1" <?= !empty($managedUserForm['is_locked']) ? 'checked' : '' ?>>
+              <span>Lock this user account</span>
+            </label>
+
+            <div class="admin-actions">
+              <button type="submit" class="install-btn admin-submit"><?= $editingManagedUser ? 'Update User' : 'Create User' ?></button>
+              <?php if ($editingManagedUser): ?>
+                <a class="secondary-link" href="index.php">Cancel</a>
               <?php endif; ?>
+            </div>
+          </form>
+
+          <div class="admin-notice-list" style="margin-top: 24px;">
+            <?php foreach ($managedUsers as $account): ?>
               <article class="admin-notice-item">
                 <div class="admin-notice-head">
                   <div>
-                    <p class="admin-notice-board"><?= e((string) $account['name']) ?></p>
-                    <h3><?= e((string) $account['username']) ?></h3>
+                    <p class="admin-notice-board"><?= e(role_label((string) $account['role'])) ?></p>
+                    <h3><?= e((string) $account['name']) ?></h3>
                   </div>
+                  <p class="notice-date"><?= !empty($account['is_locked']) ? 'Locked' : 'Active' ?></p>
                 </div>
-                <p class="admin-notice-meta">Reset username to <?= e((string) ($account['default_username'] ?? $account['username'])) ?></p>
-                <p class="admin-notice-meta">Reset password to the current default program chair password.</p>
-                <form method="post" class="admin-inline-form" onsubmit="return confirm('Reset this program chair account to its default username and password?');">
-                  <input type="hidden" name="csrf_token" value="<?= e(csrf_token()) ?>">
-                  <input type="hidden" name="action" value="reset_program_chair_account">
-                  <input type="hidden" name="target_username" value="<?= e((string) $account['username']) ?>">
-                  <button type="submit" class="admin-delete-btn">Reset Account</button>
-                </form>
-                <?php $accountBoardId = (string) (($account['board_ids'][0] ?? '')); ?>
-                <?php if ($accountBoardId !== '' && isset($deanFeedbackByBoard[$accountBoardId])): ?>
+                <p class="admin-notice-meta">Username: <?= e((string) $account['username']) ?></p>
+                <p class="admin-notice-meta">Default Username: <?= e((string) ($account['default_username'] ?? $account['username'])) ?></p>
+                <p class="admin-notice-meta">Department: <?= e((string) ($boardCatalog[primary_board_id_for_user($account)]['name'] ?? (primary_board_id_for_user($account) !== '' ? primary_board_id_for_user($account) : 'None'))) ?></p>
+                <p class="admin-notice-meta">Authenticator: <?= !empty($account['totp_enabled']) ? 'Enabled' : 'Not set' ?></p>
+                <?php if ((string) $account['username'] === (string) $user['username']): ?>
+                  <p class="admin-notice-meta">Current logged-in account.</p>
+                <?php endif; ?>
+                <div class="admin-actions">
+                  <?php if ((string) $account['username'] !== (string) $user['username']): ?>
+                    <a class="secondary-link" href="index.php?user_edit=<?= urlencode((string) $account['username']) ?>">Edit</a>
+                    <form method="post" class="admin-inline-form" onsubmit="return confirm('Reset this account to its default username and password?');">
+                      <input type="hidden" name="csrf_token" value="<?= e(csrf_token()) ?>">
+                      <input type="hidden" name="action" value="reset_managed_user_account">
+                      <input type="hidden" name="target_username" value="<?= e((string) $account['username']) ?>">
+                      <button type="submit" class="admin-delete-btn">Reset</button>
+                    </form>
+                    <form method="post" class="admin-inline-form" onsubmit="return confirm('Change this user lock status?');">
+                      <input type="hidden" name="csrf_token" value="<?= e(csrf_token()) ?>">
+                      <input type="hidden" name="action" value="toggle_managed_user_lock">
+                      <input type="hidden" name="target_username" value="<?= e((string) $account['username']) ?>">
+                      <button type="submit" class="admin-delete-btn"><?= !empty($account['is_locked']) ? 'Unlock' : 'Lock' ?></button>
+                    </form>
+                    <form method="post" class="admin-inline-form" onsubmit="return confirm('Reset this user\\'s authenticator setup?');">
+                      <input type="hidden" name="csrf_token" value="<?= e(csrf_token()) ?>">
+                      <input type="hidden" name="action" value="reset_managed_user_totp">
+                      <input type="hidden" name="target_username" value="<?= e((string) $account['username']) ?>">
+                      <button type="submit" class="admin-delete-btn">Reset 2FA</button>
+                    </form>
+                  <?php else: ?>
+                    <span class="admin-notice-meta">Use Account Settings for this account.</span>
+                  <?php endif; ?>
+                </div>
+
+                <?php $accountBoardId = primary_board_id_for_user($account); ?>
+                <?php if (($user['role'] ?? '') === 'dean' && $accountBoardId !== '' && isset($deanFeedbackByBoard[$accountBoardId])): ?>
                   <div class="admin-feedback-block">
                     <p class="admin-notice-meta">Feedback for <?= e((string) ($boardCatalog[$accountBoardId]['name'] ?? $accountBoardId)) ?></p>
                     <?php if ($deanFeedbackByBoard[$accountBoardId] === []): ?>
@@ -595,6 +1079,25 @@ if (($user['role'] ?? '') === 'dean') {
               </article>
             <?php endforeach; ?>
           </div>
+        </article>
+      <?php elseif (($user['role'] ?? '') === 'dean'): ?>
+        <article class="admin-list glass-panel">
+          <p class="eyebrow">Dean Controls</p>
+          <h2>School-wide feedback</h2>
+          <?php if (!empty($deanFeedbackByBoard['sace'])): ?>
+            <div class="admin-feedback-block">
+              <p class="admin-notice-board">NULIPA-SACE School-wide Feedback</p>
+              <?php foreach ($deanFeedbackByBoard['sace'] as $feedback): ?>
+                <article class="admin-feedback-item">
+                  <p class="admin-notice-meta"><?= e(feedback_type_label((string) $feedback['type'])) ?> | <?= e(format_datetime_label((string) $feedback['created_at'])) ?></p>
+                  <p class="admin-notice-meta"><?= !empty($feedback['is_anonymous']) ? 'Anonymous sender' : 'Sender email: ' . e((string) $feedback['email']) ?></p>
+                  <p class="admin-notice-body"><?= nl2br(e((string) $feedback['message'])) ?></p>
+                </article>
+              <?php endforeach; ?>
+            </div>
+          <?php else: ?>
+            <p class="admin-notice-meta">No school-wide feedback submitted yet.</p>
+          <?php endif; ?>
         </article>
       <?php endif; ?>
     </section>
