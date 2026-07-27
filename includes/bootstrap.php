@@ -118,6 +118,15 @@ function manual_calendar_event_timezone(): DateTimeZone
     return new DateTimeZone('Asia/Manila');
 }
 
+function is_missing_table_exception(Throwable $exception, string $tableName): bool
+{
+    $message = $exception->getMessage();
+
+    return str_contains($message, "Table '")
+        && str_contains($message, '.' . $tableName . "'")
+        && str_contains($message, "doesn't exist");
+}
+
 function normalize_manual_calendar_event_record(array $event): array
 {
     $boardId = trim((string) ($event['board_id'] ?? ''));
@@ -142,11 +151,19 @@ function normalize_manual_calendar_event_record(array $event): array
 function all_manual_calendar_events(?PDO $pdo = null): array
 {
     $pdo ??= database();
-    $statement = $pdo->query('
-        SELECT id, board_id, title, event_date, start_time, end_time, created_by, created_by_name, created_at, updated_at
-        FROM manual_calendar_events
-        ORDER BY event_date ASC, start_time ASC, created_at ASC
-    ');
+    try {
+        $statement = $pdo->query('
+            SELECT id, board_id, title, event_date, start_time, end_time, created_by, created_by_name, created_at, updated_at
+            FROM manual_calendar_events
+            ORDER BY event_date ASC, start_time ASC, created_at ASC
+        ');
+    } catch (Throwable $exception) {
+        if (is_missing_table_exception($exception, 'manual_calendar_events')) {
+            return [];
+        }
+
+        throw $exception;
+    }
 
     return array_map('normalize_manual_calendar_event_record', $statement->fetchAll());
 }

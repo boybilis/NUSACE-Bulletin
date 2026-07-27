@@ -808,7 +808,7 @@ if (($user['role'] ?? '') === 'dean') {
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Admin Dashboard | NU LIPA SACE</title>
-  <link rel="stylesheet" href="../styles.css?v=20260726-admin-users1">
+  <link rel="stylesheet" href="../styles.css?v=20260727-admin-notice-table1">
 </head>
 <body class="admin-body">
   <main class="admin-shell">
@@ -966,39 +966,30 @@ if (($user['role'] ?? '') === 'dean') {
         <article class="admin-list glass-panel">
           <p class="eyebrow">Your Notices</p>
           <h2>Official bulletin notices you created</h2>
-          <div class="admin-notice-list">
-            <?php foreach ($visibleNotices as $notice): ?>
-              <article class="admin-notice-item">
-                <div class="admin-notice-head">
-                  <div>
-                    <p class="admin-notice-board"><?= e($boardCatalog[$notice['board_id']]['name'] ?? $notice['board_id']) ?></p>
-                    <h3><?= e((string) $notice['title']) ?></h3>
-                  </div>
-                  <p class="notice-date"><?= e((string) $notice['date']) ?></p>
-                </div>
-                <p class="admin-notice-meta"><?= e((string) $notice['category']) ?> | <?= e((string) $notice['audience']) ?> | <?= ucfirst(notice_scope_status($notice, $today)) ?><?= !empty($notice['pinned']) ? ' | Pinned' : '' ?></p>
-                <p class="admin-notice-meta">Owner: <?= e((string) ($notice['created_by_name'] ?? '')) ?></p>
-                <p class="admin-notice-meta">Visible: <?= e((string) $notice['visible_from']) ?> to <?= e((string) $notice['visible_until']) ?></p>
-                <div class="admin-tag-row">
-                  <?php foreach (($notice['tags'] ?? []) as $tag): ?>
-                    <span class="tag-chip"><?= e((string) $tag) ?></span>
-                  <?php endforeach; ?>
-                </div>
-                <p class="admin-notice-body"><?= nl2br(e((string) $notice['text'])) ?></p>
-                <?php if (!empty($notice['attachment'])): ?>
-                  <p class="admin-notice-meta">Attachment: <a class="secondary-link secondary-link-inline" href="../<?= e((string) $notice['attachment']['path']) ?>" target="_blank" rel="noopener"><?= e((string) $notice['attachment']['name']) ?></a></p>
-                <?php endif; ?>
-                <div class="admin-actions">
-                  <a class="secondary-link" href="index.php?edit=<?= urlencode((string) $notice['id']) ?>">Edit</a>
-                  <form method="post" class="admin-inline-form" onsubmit="return confirm('Delete this notice?');">
-                    <input type="hidden" name="csrf_token" value="<?= e(csrf_token()) ?>">
-                    <input type="hidden" name="action" value="delete_notice">
-                    <input type="hidden" name="notice_id" value="<?= e((string) $notice['id']) ?>">
-                    <button type="submit" class="admin-delete-btn">Delete</button>
-                  </form>
-                </div>
-              </article>
-            <?php endforeach; ?>
+          <div class="admin-table-toolbar">
+            <label class="admin-table-search">
+              <span>Search</span>
+              <input type="search" id="adminNoticeSearch" placeholder="Search title, board, category, audience, tags">
+            </label>
+          </div>
+          <div class="admin-table-wrap">
+            <table class="admin-data-table" id="adminNoticeTable">
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Board</th>
+                  <th>Title</th>
+                  <th>Category</th>
+                  <th>Status</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="adminNoticeTableBody">
+                <tr>
+                  <td colspan="6" class="admin-table-empty">Loading notices...</td>
+                </tr>
+              </tbody>
+            </table>
           </div>
         </article>
       </section>
@@ -1333,5 +1324,238 @@ if (($user['role'] ?? '') === 'dean') {
       <?php endif; ?>
     </section>
   </main>
+
+  <div class="attachment-modal" id="adminNoticeModal" hidden>
+    <div class="attachment-modal-backdrop" data-close-admin-notice-modal></div>
+    <div class="attachment-modal-dialog glass-panel">
+      <div class="attachment-modal-head">
+        <div>
+          <p class="eyebrow">Notice Preview</p>
+          <h2 id="adminNoticeModalTitle">Notice</h2>
+        </div>
+        <button type="button" class="attachment-modal-close" data-close-admin-notice-modal aria-label="Close notice preview">×</button>
+      </div>
+      <div class="attachment-modal-body">
+        <div class="admin-preview-body" id="adminNoticeModalContent"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    (() => {
+      const apiUrl = 'notices-api.php';
+      const csrfToken = <?= json_encode(csrf_token(), JSON_UNESCAPED_SLASHES) ?>;
+      const searchInput = document.getElementById('adminNoticeSearch');
+      const tableBody = document.getElementById('adminNoticeTableBody');
+      const modal = document.getElementById('adminNoticeModal');
+      const modalTitle = document.getElementById('adminNoticeModalTitle');
+      const modalContent = document.getElementById('adminNoticeModalContent');
+      let notices = [];
+      let filteredNotices = [];
+
+      function escapeHtml(value) {
+        return String(value ?? '')
+          .replaceAll('&', '&amp;')
+          .replaceAll('<', '&lt;')
+          .replaceAll('>', '&gt;')
+          .replaceAll('"', '&quot;')
+          .replaceAll("'", '&#39;');
+      }
+
+      function formatTags(tags) {
+        if (!Array.isArray(tags) || tags.length === 0) {
+          return '<span class="admin-preview-muted">No tags</span>';
+        }
+
+        return tags.map((tag) => `<span class="tag-chip">${escapeHtml(tag)}</span>`).join('');
+      }
+
+      function renderEmptyRow(message) {
+        tableBody.innerHTML = `<tr><td colspan="6" class="admin-table-empty">${escapeHtml(message)}</td></tr>`;
+      }
+
+      function openModal(notice) {
+        if (!modal || !modalTitle || !modalContent) {
+          return;
+        }
+
+        modalTitle.textContent = notice.title || 'Notice';
+        modalContent.innerHTML = `
+          <div class="admin-preview-stack">
+            <p class="admin-notice-meta"><strong>Board:</strong> ${escapeHtml(notice.board_name || '')}</p>
+            <p class="admin-notice-meta"><strong>Category:</strong> ${escapeHtml(notice.category || '')}</p>
+            <p class="admin-notice-meta"><strong>Audience:</strong> ${escapeHtml(notice.audience || '')}</p>
+            <p class="admin-notice-meta"><strong>Date:</strong> ${escapeHtml(notice.date || '')}</p>
+            <p class="admin-notice-meta"><strong>Visible:</strong> ${escapeHtml(notice.visible_from || '')} to ${escapeHtml(notice.visible_until || '')}</p>
+            <p class="admin-notice-meta"><strong>Status:</strong> ${escapeHtml(notice.status || '')}${notice.pinned ? ' | Pinned' : ''}</p>
+            <div class="admin-tag-row">${formatTags(notice.tags || [])}</div>
+            <div class="admin-preview-text">${escapeHtml(notice.text || '').replaceAll('\n', '<br>')}</div>
+            ${notice.attachment && notice.attachment.path
+              ? `<p class="admin-notice-meta"><strong>Attachment:</strong> <a class="secondary-link secondary-link-inline" href="../${escapeHtml(notice.attachment.path)}" target="_blank" rel="noopener">${escapeHtml(notice.attachment.name || 'Open attachment')}</a></p>`
+              : ''}
+          </div>
+        `;
+        modal.hidden = false;
+        document.body.classList.add('modal-open');
+      }
+
+      function closeModal() {
+        if (!modal) {
+          return;
+        }
+        modal.hidden = true;
+        document.body.classList.remove('modal-open');
+      }
+
+      function renderRows(items) {
+        if (!Array.isArray(items) || items.length === 0) {
+          renderEmptyRow('No notices match your search.');
+          return;
+        }
+
+        tableBody.innerHTML = items.map((notice) => `
+          <tr>
+            <td>${escapeHtml(notice.date || '')}</td>
+            <td>${escapeHtml(notice.board_name || '')}</td>
+            <td>
+              <div class="admin-table-title">
+                <strong>${escapeHtml(notice.title || '')}</strong>
+                <span>${notice.pinned ? 'Pinned' : ''}</span>
+              </div>
+            </td>
+            <td>${escapeHtml(notice.category || '')}</td>
+            <td>${escapeHtml(notice.status || '')}</td>
+            <td>
+              <div class="admin-table-actions">
+                <button type="button" class="secondary-link admin-table-link" data-action="view" data-id="${escapeHtml(notice.id || '')}">View</button>
+                <a class="secondary-link admin-table-link" href="${escapeHtml(notice.edit_url || '#')}">Edit</a>
+                <button type="button" class="admin-delete-btn admin-table-delete" data-action="delete" data-id="${escapeHtml(notice.id || '')}">Delete</button>
+              </div>
+            </td>
+          </tr>
+        `).join('');
+      }
+
+      function applyFilter() {
+        const query = (searchInput?.value || '').trim().toLowerCase();
+        if (query === '') {
+          filteredNotices = [...notices];
+          renderRows(filteredNotices);
+          return;
+        }
+
+        filteredNotices = notices.filter((notice) => {
+          const haystack = [
+            notice.title,
+            notice.board_name,
+            notice.category,
+            notice.audience,
+            notice.status,
+            ...(Array.isArray(notice.tags) ? notice.tags : [])
+          ].join(' ').toLowerCase();
+
+          return haystack.includes(query);
+        });
+
+        renderRows(filteredNotices);
+      }
+
+      async function loadNotices() {
+        renderEmptyRow('Loading notices...');
+
+        try {
+          const response = await fetch(apiUrl, {
+            headers: {
+              'Accept': 'application/json'
+            }
+          });
+          const payload = await response.json();
+
+          if (!response.ok) {
+            throw new Error(payload.error || 'Unable to load notices.');
+          }
+
+          notices = Array.isArray(payload.notices) ? payload.notices : [];
+          filteredNotices = [...notices];
+          applyFilter();
+        } catch (error) {
+          renderEmptyRow(error instanceof Error ? error.message : 'Unable to load notices.');
+        }
+      }
+
+      async function deleteNotice(noticeId) {
+        if (!window.confirm('Delete this notice?')) {
+          return;
+        }
+
+        const formData = new FormData();
+        formData.set('csrf_token', csrfToken);
+        formData.set('action', 'delete_notice');
+        formData.set('notice_id', noticeId);
+
+        try {
+          const response = await fetch(apiUrl, {
+            method: 'POST',
+            body: formData,
+            headers: {
+              'Accept': 'application/json'
+            }
+          });
+          const payload = await response.json();
+
+          if (!response.ok) {
+            throw new Error(payload.error || 'Unable to delete notice.');
+          }
+
+          notices = notices.filter((notice) => notice.id !== noticeId);
+          applyFilter();
+        } catch (error) {
+          window.alert(error instanceof Error ? error.message : 'Unable to delete notice.');
+        }
+      }
+
+      tableBody?.addEventListener('click', (event) => {
+        const target = event.target;
+        if (!(target instanceof HTMLElement)) {
+          return;
+        }
+
+        const action = target.dataset.action || '';
+        const noticeId = target.dataset.id || '';
+        if (noticeId === '') {
+          return;
+        }
+
+        const notice = notices.find((item) => item.id === noticeId);
+        if (!notice) {
+          return;
+        }
+
+        if (action === 'view') {
+          openModal(notice);
+          return;
+        }
+
+        if (action === 'delete') {
+          deleteNotice(noticeId);
+        }
+      });
+
+      searchInput?.addEventListener('input', applyFilter);
+      modal?.addEventListener('click', (event) => {
+        const target = event.target;
+        if (target instanceof HTMLElement && target.hasAttribute('data-close-admin-notice-modal')) {
+          closeModal();
+        }
+      });
+      document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape') {
+          closeModal();
+        }
+      });
+
+      loadNotices();
+    })();
+  </script>
 </body>
 </html>

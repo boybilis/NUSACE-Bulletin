@@ -1028,6 +1028,115 @@ main {
   gap: 16px;
 }
 
+.admin-table-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 16px;
+}
+
+.admin-table-search {
+  display: grid;
+  gap: 6px;
+  min-width: min(100%, 320px);
+  color: rgba(16, 35, 59, 0.8);
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.admin-table-search input {
+  width: 100%;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(0, 58, 112, 0.12);
+  background: rgba(255, 255, 255, 0.92);
+  font: inherit;
+  color: var(--navy);
+}
+
+.admin-table-wrap {
+  overflow-x: auto;
+  border-radius: var(--radius-md);
+  border: 1px solid rgba(0, 58, 112, 0.08);
+  background: rgba(255, 255, 255, 0.9);
+}
+
+.admin-data-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 760px;
+}
+
+.admin-data-table th,
+.admin-data-table td {
+  padding: 14px 16px;
+  border-bottom: 1px solid rgba(0, 58, 112, 0.08);
+  text-align: left;
+  vertical-align: top;
+}
+
+.admin-data-table th {
+  background: rgba(0, 58, 112, 0.04);
+  color: rgba(16, 35, 59, 0.82);
+  font-size: 0.84rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.admin-data-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.admin-table-empty {
+  text-align: center !important;
+  color: rgba(16, 35, 59, 0.65);
+}
+
+.admin-table-title {
+  display: grid;
+  gap: 4px;
+}
+
+.admin-table-title span {
+  color: rgba(16, 35, 59, 0.6);
+  font-size: 0.85rem;
+}
+
+.admin-table-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.admin-table-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 42px;
+}
+
+.admin-table-delete {
+  min-height: 42px;
+}
+
+.admin-preview-body {
+  padding: 22px;
+}
+
+.admin-preview-stack {
+  display: grid;
+  gap: 14px;
+}
+
+.admin-preview-text {
+  color: var(--navy);
+  line-height: 1.65;
+  white-space: normal;
+}
+
+.admin-preview-muted {
+  color: rgba(16, 35, 59, 0.58);
+}
+
 .admin-notice-item {
   padding: 18px;
   border-radius: var(--radius-md);
