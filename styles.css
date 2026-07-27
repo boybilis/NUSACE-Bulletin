@@ -1107,6 +1107,53 @@ main {
   gap: 8px;
 }
 
+.admin-table-pagination {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  margin-top: 16px;
+  flex-wrap: wrap;
+}
+
+.admin-table-pageinfo {
+  margin: 0;
+  color: rgba(16, 35, 59, 0.72);
+  font-size: 0.92rem;
+}
+
+.admin-table-pageactions,
+.admin-table-pages {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.admin-table-pagebtn {
+  min-width: 40px;
+  min-height: 40px;
+  padding: 8px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(0, 58, 112, 0.12);
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--navy);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.admin-table-pagebtn.is-active {
+  border-color: rgba(183, 141, 0, 0.45);
+  color: #9e7a00;
+  background: rgba(183, 141, 0, 0.1);
+}
+
+.admin-table-ellipsis {
+  color: rgba(16, 35, 59, 0.55);
+  padding-inline: 4px;
+}
+
 .admin-table-link {
   display: inline-flex;
   align-items: center;

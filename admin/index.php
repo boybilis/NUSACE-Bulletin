@@ -991,6 +991,14 @@ if (($user['role'] ?? '') === 'dean') {
               </tbody>
             </table>
           </div>
+          <div class="admin-table-pagination" id="adminNoticePagination" hidden>
+            <p class="admin-table-pageinfo" id="adminNoticePageInfo">Showing 0 to 0 of 0 notices</p>
+            <div class="admin-table-pageactions">
+              <button type="button" class="secondary-link admin-table-link" id="adminNoticePrev">Previous</button>
+              <div class="admin-table-pages" id="adminNoticePages"></div>
+              <button type="button" class="secondary-link admin-table-link" id="adminNoticeNext">Next</button>
+            </div>
+          </div>
         </article>
       </section>
 
@@ -1347,11 +1355,18 @@ if (($user['role'] ?? '') === 'dean') {
       const csrfToken = <?= json_encode(csrf_token(), JSON_UNESCAPED_SLASHES) ?>;
       const searchInput = document.getElementById('adminNoticeSearch');
       const tableBody = document.getElementById('adminNoticeTableBody');
+      const paginationWrap = document.getElementById('adminNoticePagination');
+      const pageInfo = document.getElementById('adminNoticePageInfo');
+      const pageButtons = document.getElementById('adminNoticePages');
+      const prevButton = document.getElementById('adminNoticePrev');
+      const nextButton = document.getElementById('adminNoticeNext');
       const modal = document.getElementById('adminNoticeModal');
       const modalTitle = document.getElementById('adminNoticeModalTitle');
       const modalContent = document.getElementById('adminNoticeModalContent');
       let notices = [];
       let filteredNotices = [];
+      let currentPage = 1;
+      const pageSize = 10;
 
       function escapeHtml(value) {
         return String(value ?? '')
@@ -1372,6 +1387,9 @@ if (($user['role'] ?? '') === 'dean') {
 
       function renderEmptyRow(message) {
         tableBody.innerHTML = `<tr><td colspan="6" class="admin-table-empty">${escapeHtml(message)}</td></tr>`;
+        if (paginationWrap) {
+          paginationWrap.hidden = true;
+        }
       }
 
       function openModal(notice) {
@@ -1407,13 +1425,56 @@ if (($user['role'] ?? '') === 'dean') {
         document.body.classList.remove('modal-open');
       }
 
+      function renderPagination(totalItems) {
+        if (!paginationWrap || !pageInfo || !pageButtons || !prevButton || !nextButton) {
+          return;
+        }
+
+        const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
+        currentPage = Math.min(Math.max(1, currentPage), totalPages);
+        const start = totalItems === 0 ? 0 : ((currentPage - 1) * pageSize) + 1;
+        const end = Math.min(totalItems, currentPage * pageSize);
+
+        pageInfo.textContent = `Showing ${start} to ${end} of ${totalItems} notice${totalItems === 1 ? '' : 's'}`;
+        paginationWrap.hidden = totalItems <= pageSize;
+        prevButton.disabled = currentPage <= 1;
+        nextButton.disabled = currentPage >= totalPages;
+
+        const pages = [];
+        for (let page = 1; page <= totalPages; page += 1) {
+          if (
+            page === 1
+            || page === totalPages
+            || Math.abs(page - currentPage) <= 1
+          ) {
+            pages.push(page);
+          } else if (pages[pages.length - 1] !== '…') {
+            pages.push('…');
+          }
+        }
+
+        pageButtons.innerHTML = pages.map((page) => {
+          if (page === '…') {
+            return '<span class="admin-table-ellipsis">…</span>';
+          }
+
+          return `<button type="button" class="admin-table-pagebtn${page === currentPage ? ' is-active' : ''}" data-page="${page}">${page}</button>`;
+        }).join('');
+      }
+
       function renderRows(items) {
         if (!Array.isArray(items) || items.length === 0) {
           renderEmptyRow('No notices match your search.');
           return;
         }
 
-        tableBody.innerHTML = items.map((notice) => `
+        const totalItems = items.length;
+        const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
+        currentPage = Math.min(Math.max(1, currentPage), totalPages);
+        const pageStart = (currentPage - 1) * pageSize;
+        const visibleItems = items.slice(pageStart, pageStart + pageSize);
+
+        tableBody.innerHTML = visibleItems.map((notice) => `
           <tr>
             <td>${escapeHtml(notice.date || '')}</td>
             <td>${escapeHtml(notice.board_name || '')}</td>
@@ -1434,12 +1495,15 @@ if (($user['role'] ?? '') === 'dean') {
             </td>
           </tr>
         `).join('');
+
+        renderPagination(totalItems);
       }
 
       function applyFilter() {
         const query = (searchInput?.value || '').trim().toLowerCase();
         if (query === '') {
           filteredNotices = [...notices];
+          currentPage = 1;
           renderRows(filteredNotices);
           return;
         }
@@ -1457,6 +1521,7 @@ if (($user['role'] ?? '') === 'dean') {
           return haystack.includes(query);
         });
 
+        currentPage = 1;
         renderRows(filteredNotices);
       }
 
@@ -1539,6 +1604,38 @@ if (($user['role'] ?? '') === 'dean') {
         if (action === 'delete') {
           deleteNotice(noticeId);
         }
+      });
+
+      pageButtons?.addEventListener('click', (event) => {
+        const target = event.target;
+        if (!(target instanceof HTMLElement)) {
+          return;
+        }
+
+        const page = Number.parseInt(target.dataset.page || '', 10);
+        if (!Number.isInteger(page) || page < 1) {
+          return;
+        }
+
+        currentPage = page;
+        renderRows(filteredNotices);
+      });
+
+      prevButton?.addEventListener('click', () => {
+        if (currentPage <= 1) {
+          return;
+        }
+        currentPage -= 1;
+        renderRows(filteredNotices);
+      });
+
+      nextButton?.addEventListener('click', () => {
+        const totalPages = Math.max(1, Math.ceil(filteredNotices.length / pageSize));
+        if (currentPage >= totalPages) {
+          return;
+        }
+        currentPage += 1;
+        renderRows(filteredNotices);
       });
 
       searchInput?.addEventListener('input', applyFilter);
