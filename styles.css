@@ -1055,15 +1055,38 @@ main {
 
 .admin-table-wrap {
   overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-gutter: stable both-edges;
   border-radius: var(--radius-md);
   border: 1px solid rgba(0, 58, 112, 0.08);
   background: rgba(255, 255, 255, 0.9);
+}
+
+.admin-table-wrap::-webkit-scrollbar {
+  height: 12px;
+}
+
+.admin-table-wrap::-webkit-scrollbar-track {
+  background: rgba(0, 58, 112, 0.06);
+  border-radius: 999px;
+}
+
+.admin-table-wrap::-webkit-scrollbar-thumb {
+  background: rgba(0, 58, 112, 0.28);
+  border-radius: 999px;
 }
 
 .admin-data-table {
   width: 100%;
   border-collapse: collapse;
   min-width: 760px;
+}
+
+.admin-table-scrollhint {
+  margin: 10px 2px 0;
+  color: rgba(16, 35, 59, 0.62);
+  font-size: 0.86rem;
 }
 
 .admin-data-table th,

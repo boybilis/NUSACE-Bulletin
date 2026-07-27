@@ -991,6 +991,7 @@ if (($user['role'] ?? '') === 'dean') {
               </tbody>
             </table>
           </div>
+          <p class="admin-table-scrollhint">Swipe horizontally to see the full table on smaller screens.</p>
           <div class="admin-table-pagination" id="adminNoticePagination" hidden>
             <p class="admin-table-pageinfo" id="adminNoticePageInfo">Showing 0 to 0 of 0 notices</p>
             <div class="admin-table-pageactions">
