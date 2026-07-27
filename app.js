@@ -711,12 +711,12 @@ function renderCalendarEvents(events) {
   }
 
   if (!Array.isArray(events) || events.length === 0) {
-    calendarStatus.textContent = "No published calendar events are available right now.";
+    calendarStatus.textContent = "No calendar events are available right now.";
     calendarList.innerHTML = "";
     return;
   }
 
-  calendarStatus.textContent = `${events.length} published calendar event${events.length === 1 ? "" : "s"} loaded.`;
+  calendarStatus.textContent = `${events.length} calendar event${events.length === 1 ? "" : "s"} loaded.`;
   calendarList.innerHTML = events.map((event) => {
     const startsAt = new Date(event.starts_at);
     const endsAt = event.ends_at ? new Date(event.ends_at) : null;
@@ -744,9 +744,10 @@ function renderCalendarEvents(events) {
       <article class="calendar-event-card">
         <div class="calendar-event-date">${escapeHtml(formatCalendarDate(startsAt))}</div>
         <div class="calendar-event-body">
-          <p class="eyebrow">Published Calendar Event</p>
+          <p class="eyebrow">${escapeHtml(event.source_label || "Calendar Event")}</p>
           <h3>${escapeHtml(event.title || "Untitled event")}</h3>
           <p class="calendar-event-meta">${escapeHtml(dateLine)}</p>
+          ${event.board_name ? `<p class="calendar-event-meta">Board: ${escapeHtml(event.board_name)}</p>` : ""}
           ${endLine}
           ${location}
           ${description}

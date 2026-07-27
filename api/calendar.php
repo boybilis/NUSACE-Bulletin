@@ -169,6 +169,10 @@ function build_calendar_event(array $properties): ?array
         'ends_at' => $end?->format(DATE_ATOM),
         'month_key' => $start->format('Y-m'),
         'sort_key' => $start->format('YmdHis'),
+        'source' => 'outlook',
+        'source_label' => 'Published Calendar Event',
+        'board_id' => 'sace',
+        'board_name' => board_catalog()['sace']['name'] ?? 'NULIPA-SACE',
     ];
 }
 
@@ -254,8 +258,19 @@ function filter_calendar_events_by_month(array $events, string $monthKey): array
 
 try {
     $selectedMonth = calendar_month_key(isset($_GET['month']) ? (string) $_GET['month'] : null);
-    $ics = calendar_http_fetch(published_calendar_ics_url());
-    $allEvents = parse_ical_events($ics);
+    $manualEvents = manual_calendar_events_for_public();
+    $outlookEvents = [];
+    $outlookUnavailableReason = '';
+
+    try {
+        $ics = calendar_http_fetch(published_calendar_ics_url());
+        $outlookEvents = parse_ical_events($ics);
+    } catch (RuntimeException $exception) {
+        $outlookUnavailableReason = $exception->getMessage();
+    }
+
+    $allEvents = array_merge($outlookEvents, $manualEvents);
+    usort($allEvents, static fn (array $left, array $right): int => strcmp((string) ($left['sort_key'] ?? ''), (string) ($right['sort_key'] ?? '')));
     $availableMonths = available_calendar_months($allEvents);
 
     $hasSelectedMonth = false;
@@ -280,6 +295,8 @@ try {
         'selectedMonth' => $selectedMonth,
         'availableMonths' => $availableMonths,
         'events' => $events,
+        'outlookAvailable' => $outlookUnavailableReason === '',
+        'outlookError' => $outlookUnavailableReason,
     ], JSON_UNESCAPED_SLASHES);
 } catch (RuntimeException $exception) {
     http_response_code(502);

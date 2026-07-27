@@ -113,6 +113,164 @@ function published_calendar_ics_url(): string
     return PUBLISHED_CALENDAR_ICS_URL;
 }
 
+function manual_calendar_event_timezone(): DateTimeZone
+{
+    return new DateTimeZone('Asia/Manila');
+}
+
+function normalize_manual_calendar_event_record(array $event): array
+{
+    $boardId = trim((string) ($event['board_id'] ?? ''));
+    $eventDate = trim((string) ($event['event_date'] ?? ''));
+    $startTime = substr(trim((string) ($event['start_time'] ?? '')), 0, 5);
+    $endTime = substr(trim((string) ($event['end_time'] ?? '')), 0, 5);
+
+    return [
+        'id' => trim((string) ($event['id'] ?? '')),
+        'board_id' => $boardId,
+        'title' => trim((string) ($event['title'] ?? '')),
+        'event_date' => $eventDate,
+        'start_time' => $startTime,
+        'end_time' => $endTime,
+        'created_by' => trim((string) ($event['created_by'] ?? '')),
+        'created_by_name' => trim((string) ($event['created_by_name'] ?? '')),
+        'created_at' => mysql_datetime_to_iso8601((string) ($event['created_at'] ?? '')),
+        'updated_at' => mysql_datetime_to_iso8601((string) ($event['updated_at'] ?? '')),
+    ];
+}
+
+function all_manual_calendar_events(?PDO $pdo = null): array
+{
+    $pdo ??= database();
+    $statement = $pdo->query('
+        SELECT id, board_id, title, event_date, start_time, end_time, created_by, created_by_name, created_at, updated_at
+        FROM manual_calendar_events
+        ORDER BY event_date ASC, start_time ASC, created_at ASC
+    ');
+
+    return array_map('normalize_manual_calendar_event_record', $statement->fetchAll());
+}
+
+function find_manual_calendar_event_by_id(array $events, string $id): ?array
+{
+    foreach ($events as $event) {
+        if (($event['id'] ?? '') === $id) {
+            return $event;
+        }
+    }
+
+    return null;
+}
+
+function persist_manual_calendar_events(array $events, ?PDO $pdo = null): void
+{
+    $pdo ??= database();
+    $pdo->exec('DELETE FROM manual_calendar_events');
+
+    $statement = $pdo->prepare('
+        INSERT INTO manual_calendar_events (
+            id, board_id, title, event_date, start_time, end_time, created_by, created_by_name, created_at, updated_at
+        ) VALUES (
+            :id, :board_id, :title, :event_date, :start_time, :end_time, :created_by, :created_by_name, :created_at, :updated_at
+        )
+    ');
+
+    foreach ($events as $event) {
+        $event = normalize_manual_calendar_event_record($event);
+        if (
+            $event['id'] === ''
+            || $event['board_id'] === ''
+            || $event['title'] === ''
+            || $event['event_date'] === ''
+            || $event['start_time'] === ''
+            || $event['end_time'] === ''
+            || $event['created_by'] === ''
+            || $event['created_by_name'] === ''
+        ) {
+            throw new RuntimeException('Manual calendar events must include board, title, date, time, and owner details.');
+        }
+
+        $statement->execute([
+            ':id' => $event['id'],
+            ':board_id' => $event['board_id'],
+            ':title' => $event['title'],
+            ':event_date' => $event['event_date'],
+            ':start_time' => $event['start_time'],
+            ':end_time' => $event['end_time'],
+            ':created_by' => $event['created_by'],
+            ':created_by_name' => $event['created_by_name'],
+            ':created_at' => iso8601_to_mysql_datetime($event['created_at']) ?? gmdate('Y-m-d H:i:s'),
+            ':updated_at' => iso8601_to_mysql_datetime($event['updated_at']) ?? gmdate('Y-m-d H:i:s'),
+        ]);
+    }
+}
+
+function mutate_manual_calendar_events(callable $mutator): array
+{
+    return database_transaction(static function (PDO $pdo) use ($mutator): array {
+        $events = all_manual_calendar_events($pdo);
+        $updatedEvents = $mutator($events);
+        if (!is_array($updatedEvents)) {
+            throw new RuntimeException('Manual calendar event mutation failed.');
+        }
+
+        persist_manual_calendar_events($updatedEvents, $pdo);
+
+        return all_manual_calendar_events($pdo);
+    });
+}
+
+function can_edit_manual_calendar_event(array $user, array $event): bool
+{
+    return ($event['created_by'] ?? '') === ($user['username'] ?? '');
+}
+
+function manual_calendar_event_public_record(array $event): array
+{
+    $normalized = normalize_manual_calendar_event_record($event);
+    $timezone = manual_calendar_event_timezone();
+    $start = DateTimeImmutable::createFromFormat('Y-m-d H:i', $normalized['event_date'] . ' ' . $normalized['start_time'], $timezone);
+    $end = DateTimeImmutable::createFromFormat('Y-m-d H:i', $normalized['event_date'] . ' ' . $normalized['end_time'], $timezone);
+
+    if (!$start instanceof DateTimeImmutable || !$end instanceof DateTimeImmutable) {
+        throw new RuntimeException('Manual calendar event has an invalid date or time.');
+    }
+
+    return [
+        'id' => $normalized['id'],
+        'title' => $normalized['title'],
+        'description' => '',
+        'location' => '',
+        'url' => '',
+        'is_all_day' => false,
+        'starts_at' => $start->format(DATE_ATOM),
+        'ends_at' => $end->format(DATE_ATOM),
+        'month_key' => $start->format('Y-m'),
+        'sort_key' => $start->format('YmdHis'),
+        'source' => 'manual',
+        'source_label' => 'Manual Calendar Entry',
+        'board_id' => $normalized['board_id'],
+        'board_name' => board_catalog()[$normalized['board_id']]['name'] ?? $normalized['board_id'],
+    ];
+}
+
+function manual_calendar_events_for_public(): array
+{
+    $events = [];
+
+    foreach (all_manual_calendar_events() as $event) {
+        try {
+            $events[] = manual_calendar_event_public_record($event);
+        } catch (RuntimeException $exception) {
+            continue;
+        }
+    }
+
+    usort($events, static fn (array $left, array $right): int => strcmp((string) $left['sort_key'], (string) $right['sort_key']));
+
+    return $events;
+}
+
 function attachment_public_path(string $filename): string
 {
     return 'uploads/attachments/' . ltrim(str_replace('\\', '/', $filename), '/');

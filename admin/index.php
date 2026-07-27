@@ -14,6 +14,7 @@ $canManageUsers = can_manage_users($user);
 $canManageNoticeModule = can_manage_notice_module($user);
 $availableBoards = accessible_boards($user);
 $allNotices = all_notices();
+$allManualCalendarEvents = all_manual_calendar_events();
 $allUsers = all_users();
 $today = today_ymd();
 $totpRequired = user_requires_totp($user);
@@ -50,7 +51,20 @@ $managedUserForm = [
     'is_locked' => false,
 ];
 
+$formCalendarEvent = [
+    'id' => '',
+    'board_id' => array_key_first($availableBoards) ?: 'sace',
+    'title' => '',
+    'event_date' => date('Y-m-d'),
+    'start_time' => '08:00',
+    'end_time' => '09:00',
+    'updated_at' => '',
+    'created_by' => (string) $user['username'],
+    'created_by_name' => (string) $user['name'],
+];
+
 $editing = false;
+$editingCalendarEvent = false;
 $editingManagedUser = false;
 $error = '';
 $success = '';
@@ -223,6 +237,82 @@ try {
             }
 
             header('Location: index.php?success=Notice saved');
+            exit;
+        }
+
+        if ($action === 'save_calendar_event') {
+            if (!$canManageNoticeModule) {
+                throw new RuntimeException('You do not have access to calendar management.');
+            }
+
+            $eventId = trim((string) ($_POST['calendar_event_id'] ?? ''));
+            $boardId = trim((string) ($_POST['board_id'] ?? ''));
+            $payload = [
+                'id' => $eventId !== '' ? $eventId : uniqid('calendar_', true),
+                'board_id' => $boardId,
+                'title' => trim((string) ($_POST['title'] ?? '')),
+                'event_date' => trim((string) ($_POST['event_date'] ?? '')),
+                'start_time' => substr(trim((string) ($_POST['start_time'] ?? '')), 0, 5),
+                'end_time' => substr(trim((string) ($_POST['end_time'] ?? '')), 0, 5),
+                'created_by' => (string) $user['username'],
+                'created_by_name' => (string) $user['name'],
+                'created_at' => gmdate('c'),
+                'updated_at' => gmdate('c'),
+            ];
+
+            foreach (['board_id', 'title', 'event_date', 'start_time', 'end_time'] as $field) {
+                if ($payload[$field] === '') {
+                    throw new RuntimeException('Board, title, date, start time, and end time are required.');
+                }
+            }
+
+            if (!isset($boardCatalog[$boardId])) {
+                throw new RuntimeException('Invalid board selected.');
+            }
+
+            if (!can_manage_board($user, $boardId)) {
+                throw new RuntimeException('You do not have permission to manage that board.');
+            }
+
+            if ($payload['start_time'] >= $payload['end_time']) {
+                throw new RuntimeException('End time must be later than the start time.');
+            }
+
+            $originalUpdatedAt = trim((string) ($_POST['original_updated_at'] ?? ''));
+
+            mutate_manual_calendar_events(function (array $events) use ($payload, $user, $originalUpdatedAt): array {
+                $updated = false;
+
+                foreach ($events as $index => $event) {
+                    if (($event['id'] ?? '') !== $payload['id']) {
+                        continue;
+                    }
+
+                    if (!can_edit_manual_calendar_event($user, $event)) {
+                        throw new RuntimeException('You can only edit manual calendar entries that you created.');
+                    }
+
+                    $currentUpdatedAt = (string) ($event['updated_at'] ?? '');
+                    if ($originalUpdatedAt !== $currentUpdatedAt) {
+                        throw new RuntimeException('This calendar entry was updated by another admin. Refresh and try again.');
+                    }
+
+                    $payload['created_at'] = (string) ($event['created_at'] ?? '');
+                    $payload['created_by'] = (string) ($event['created_by'] ?? $user['username']);
+                    $payload['created_by_name'] = (string) ($event['created_by_name'] ?? $user['name']);
+                    $events[$index] = $payload;
+                    $updated = true;
+                    break;
+                }
+
+                if (!$updated) {
+                    $events[] = $payload;
+                }
+
+                return $events;
+            });
+
+            header('Location: index.php?success=Calendar entry saved');
             exit;
         }
 
@@ -583,6 +673,38 @@ try {
             header('Location: index.php?success=Notice deleted');
             exit;
         }
+
+        if ($action === 'delete_calendar_event') {
+            if (!$canManageNoticeModule) {
+                throw new RuntimeException('You do not have access to calendar management.');
+            }
+
+            $eventId = trim((string) ($_POST['calendar_event_id'] ?? ''));
+            $target = find_manual_calendar_event_by_id($allManualCalendarEvents, $eventId);
+            if ($target === null) {
+                throw new RuntimeException('Calendar entry not found.');
+            }
+
+            if (!can_edit_manual_calendar_event($user, $target)) {
+                throw new RuntimeException('You can only delete manual calendar entries that you created.');
+            }
+
+            mutate_manual_calendar_events(static function (array $events) use ($eventId, $user): array {
+                foreach ($events as $event) {
+                    if (($event['id'] ?? '') === $eventId && !can_edit_manual_calendar_event($user, $event)) {
+                        throw new RuntimeException('You can only delete manual calendar entries that you created.');
+                    }
+                }
+
+                return array_values(array_filter(
+                    $events,
+                    static fn (array $event): bool => ($event['id'] ?? '') !== $eventId
+                ));
+            });
+
+            header('Location: index.php?success=Calendar entry deleted');
+            exit;
+        }
     }
 } catch (RuntimeException $exception) {
     if ($uploadedAttachmentForCleanup !== null) {
@@ -599,6 +721,17 @@ if ($canManageNoticeModule && isset($_GET['edit'])) {
     } elseif ($notice !== null) {
         $error = 'You can only edit notices that you created.';
         $editing = false;
+    }
+}
+
+if ($canManageNoticeModule && isset($_GET['calendar_edit'])) {
+    $editingCalendarEvent = true;
+    $calendarEvent = find_manual_calendar_event_by_id($allManualCalendarEvents, (string) $_GET['calendar_edit']);
+    if ($calendarEvent !== null && can_edit_manual_calendar_event($user, $calendarEvent)) {
+        $formCalendarEvent = $calendarEvent;
+    } elseif ($calendarEvent !== null) {
+        $error = 'You can only edit calendar entries that you created.';
+        $editingCalendarEvent = false;
     }
 }
 
@@ -635,6 +768,17 @@ $visibleNotices = array_values(array_filter(
     static fn (array $notice): bool => can_edit_notice($user, $notice)
 ));
 sort_notices($visibleNotices);
+
+$visibleCalendarEvents = array_values(array_filter(
+    $allManualCalendarEvents,
+    static fn (array $event): bool => can_edit_manual_calendar_event($user, $event)
+));
+usort($visibleCalendarEvents, static function (array $left, array $right): int {
+    $leftKey = (string) (($left['event_date'] ?? '') . ' ' . ($left['start_time'] ?? ''));
+    $rightKey = (string) (($right['event_date'] ?? '') . ' ' . ($right['start_time'] ?? ''));
+
+    return strcmp($rightKey, $leftKey);
+});
 
 $managedUsers = $allUsers;
 usort($managedUsers, static function (array $left, array $right): int {
@@ -850,6 +994,93 @@ if (($user['role'] ?? '') === 'dean') {
                     <input type="hidden" name="csrf_token" value="<?= e(csrf_token()) ?>">
                     <input type="hidden" name="action" value="delete_notice">
                     <input type="hidden" name="notice_id" value="<?= e((string) $notice['id']) ?>">
+                    <button type="submit" class="admin-delete-btn">Delete</button>
+                  </form>
+                </div>
+              </article>
+            <?php endforeach; ?>
+          </div>
+        </article>
+      </section>
+
+      <section class="admin-grid">
+        <article class="admin-editor glass-panel">
+          <p class="eyebrow"><?= $editingCalendarEvent ? 'Edit Calendar Entry' : 'Create Calendar Entry' ?></p>
+          <h2><?= $editingCalendarEvent ? 'Update a manual calendar card' : 'Add a manual calendar card for the public calendar' ?></h2>
+          <form method="post" class="admin-form-stack">
+            <input type="hidden" name="csrf_token" value="<?= e(csrf_token()) ?>">
+            <input type="hidden" name="action" value="save_calendar_event">
+            <input type="hidden" name="calendar_event_id" value="<?= e((string) $formCalendarEvent['id']) ?>">
+            <input type="hidden" name="original_updated_at" value="<?= e((string) ($formCalendarEvent['updated_at'] ?? '')) ?>">
+
+            <label class="admin-field">
+              <span>Board</span>
+              <select name="board_id" required>
+                <?php foreach ($availableBoards as $board): ?>
+                  <option value="<?= e($board['id']) ?>" <?= $formCalendarEvent['board_id'] === $board['id'] ? 'selected' : '' ?>>
+                    <?= e($board['name']) ?>
+                  </option>
+                <?php endforeach; ?>
+              </select>
+              <small class="admin-field-help">Deans may post school-wide or departmental events. Program chairs may post only to their assigned board.</small>
+            </label>
+
+            <label class="admin-field">
+              <span>Event Title</span>
+              <input type="text" name="title" value="<?= e((string) $formCalendarEvent['title']) ?>" required>
+            </label>
+
+            <label class="admin-field">
+              <span>Date</span>
+              <input type="date" name="event_date" value="<?= e((string) $formCalendarEvent['event_date']) ?>" required>
+            </label>
+
+            <label class="admin-field">
+              <span>Start Time</span>
+              <input type="time" name="start_time" value="<?= e((string) $formCalendarEvent['start_time']) ?>" required>
+            </label>
+
+            <label class="admin-field">
+              <span>End Time</span>
+              <input type="time" name="end_time" value="<?= e((string) $formCalendarEvent['end_time']) ?>" required>
+            </label>
+
+            <div class="admin-actions">
+              <button type="submit" class="install-btn admin-submit"><?= $editingCalendarEvent ? 'Update Calendar Entry' : 'Save Calendar Entry' ?></button>
+              <?php if ($editingCalendarEvent): ?>
+                <a class="secondary-link" href="index.php">Cancel</a>
+              <?php endif; ?>
+            </div>
+          </form>
+        </article>
+
+        <article class="admin-list glass-panel">
+          <p class="eyebrow">Your Calendar Entries</p>
+          <h2>Manual calendar cards you created</h2>
+          <div class="admin-notice-list">
+            <?php if ($visibleCalendarEvents === []): ?>
+              <article class="admin-notice-item">
+                <p class="admin-notice-meta">No manual calendar entries yet.</p>
+              </article>
+            <?php endif; ?>
+
+            <?php foreach ($visibleCalendarEvents as $event): ?>
+              <article class="admin-notice-item">
+                <div class="admin-notice-head">
+                  <div>
+                    <p class="admin-notice-board"><?= e($boardCatalog[$event['board_id']]['name'] ?? $event['board_id']) ?></p>
+                    <h3><?= e((string) $event['title']) ?></h3>
+                  </div>
+                  <p class="notice-date"><?= e((string) $event['event_date']) ?></p>
+                </div>
+                <p class="admin-notice-meta">Time: <?= e((string) $event['start_time']) ?> to <?= e((string) $event['end_time']) ?></p>
+                <p class="admin-notice-meta">Owner: <?= e((string) ($event['created_by_name'] ?? '')) ?></p>
+                <div class="admin-actions">
+                  <a class="secondary-link" href="index.php?calendar_edit=<?= urlencode((string) $event['id']) ?>">Edit</a>
+                  <form method="post" class="admin-inline-form" onsubmit="return confirm('Delete this calendar entry?');">
+                    <input type="hidden" name="csrf_token" value="<?= e(csrf_token()) ?>">
+                    <input type="hidden" name="action" value="delete_calendar_event">
+                    <input type="hidden" name="calendar_event_id" value="<?= e((string) $event['id']) ?>">
                     <button type="submit" class="admin-delete-btn">Delete</button>
                   </form>
                 </div>
