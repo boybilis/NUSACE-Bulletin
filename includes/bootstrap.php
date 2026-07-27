@@ -1403,7 +1403,25 @@ function is_priority_notice_visible(array $notice, ?string $today = null): bool
 
 function current_user(): ?array
 {
-    return $_SESSION['user'] ?? null;
+    $sessionUser = $_SESSION['user'] ?? null;
+    if (!is_array($sessionUser) || empty($sessionUser['username'])) {
+        return null;
+    }
+
+    $freshUser = find_user_by_username(all_users(), (string) $sessionUser['username']);
+    if ($freshUser === null) {
+        return $sessionUser;
+    }
+
+    $_SESSION['user'] = [
+        'username' => $freshUser['username'],
+        'name' => $freshUser['name'],
+        'role' => $freshUser['role'],
+        'is_locked' => !empty($freshUser['is_locked']),
+        'board_ids' => $freshUser['board_ids'],
+    ];
+
+    return array_merge($sessionUser, $freshUser);
 }
 
 function is_logged_in(): bool
