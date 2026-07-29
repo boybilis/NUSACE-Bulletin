@@ -1579,17 +1579,18 @@ main {
     min-width: 720px;
   }
 
-  .admin-user-table-wrap {
+  .admin-user-table-wrap,
+  .admin-calendar-table-wrap {
     overflow: visible;
     border: 0;
     background: transparent;
   }
 
-  .admin-user-data-table {
+  .admin-responsive-data-table {
     min-width: 0;
   }
 
-  .admin-user-data-table thead {
+  .admin-responsive-data-table thead {
     position: absolute;
     width: 1px;
     height: 1px;
@@ -1601,32 +1602,32 @@ main {
     border: 0;
   }
 
-  .admin-user-data-table,
-  .admin-user-data-table tbody,
-  .admin-user-data-table tr,
-  .admin-user-data-table td {
+  .admin-responsive-data-table,
+  .admin-responsive-data-table tbody,
+  .admin-responsive-data-table tr,
+  .admin-responsive-data-table td {
     display: block;
     width: 100%;
   }
 
-  .admin-user-data-table tbody {
+  .admin-responsive-data-table tbody {
     display: grid;
     gap: 14px;
   }
 
-  .admin-user-data-table tr {
+  .admin-responsive-data-table tr {
     padding: 14px 16px;
     border: 1px solid rgba(0, 58, 112, 0.1);
     border-radius: 18px;
     background: rgba(255, 255, 255, 0.92);
   }
 
-  .admin-user-data-table tr[hidden] {
+  .admin-responsive-data-table tr[hidden] {
     display: none;
   }
 
-  .admin-user-data-table td,
-  .admin-user-data-table td:last-child {
+  .admin-responsive-data-table td,
+  .admin-responsive-data-table td:last-child {
     display: grid;
     grid-template-columns: minmax(105px, 0.42fr) minmax(0, 1fr);
     gap: 12px;
@@ -1635,7 +1636,7 @@ main {
     border-bottom: 1px solid rgba(0, 58, 112, 0.07);
   }
 
-  .admin-user-data-table td::before {
+  .admin-responsive-data-table td::before {
     content: attr(data-label);
     color: rgba(16, 35, 59, 0.62);
     font-size: 0.76rem;
@@ -1644,15 +1645,26 @@ main {
     text-transform: uppercase;
   }
 
-  .admin-user-data-table td:last-child {
+  .admin-responsive-data-table td:last-child {
     border-bottom: 0;
   }
 
-  .admin-user-data-table .admin-table-actions {
+  .admin-responsive-data-table .admin-table-empty {
+    display: block;
+    padding: 14px 0;
+    text-align: center !important;
+  }
+
+  .admin-responsive-data-table .admin-table-empty::before {
+    display: none;
+  }
+
+  .admin-responsive-data-table .admin-table-actions {
     align-items: flex-start;
   }
 
-  .admin-user-table-scrollhint {
+  .admin-user-table-scrollhint,
+  .admin-calendar-table-scrollhint {
     display: none;
   }
 

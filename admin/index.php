@@ -12,7 +12,9 @@ $roleOptions = role_options();
 $noticeCategories = notice_categories();
 $canManageUsers = can_manage_users($user);
 $canManageNoticeModule = can_manage_notice_module($user);
+$canManageCalendarModule = can_manage_calendar_module($user);
 $availableBoards = accessible_boards($user);
+$availableCalendarBoards = accessible_calendar_boards($user);
 $allNotices = all_notices();
 $allManualCalendarEvents = all_manual_calendar_events();
 $allUsers = all_users();
@@ -53,7 +55,7 @@ $managedUserForm = [
 
 $formCalendarEvent = [
     'id' => '',
-    'board_id' => array_key_first($availableBoards) ?: 'sace',
+    'board_id' => array_key_first($availableCalendarBoards) ?: 'sace',
     'title' => '',
     'event_date' => date('Y-m-d'),
     'start_time' => '08:00',
@@ -241,7 +243,7 @@ try {
         }
 
         if ($action === 'save_calendar_event') {
-            if (!$canManageNoticeModule) {
+            if (!$canManageCalendarModule) {
                 throw new RuntimeException('You do not have access to calendar management.');
             }
 
@@ -270,7 +272,7 @@ try {
                 throw new RuntimeException('Invalid board selected.');
             }
 
-            if (!can_manage_board($user, $boardId)) {
+            if (!can_manage_calendar_board($user, $boardId)) {
                 throw new RuntimeException('You do not have permission to manage that board.');
             }
 
@@ -675,7 +677,7 @@ try {
         }
 
         if ($action === 'delete_calendar_event') {
-            if (!$canManageNoticeModule) {
+            if (!$canManageCalendarModule) {
                 throw new RuntimeException('You do not have access to calendar management.');
             }
 
@@ -724,7 +726,7 @@ if ($canManageNoticeModule && isset($_GET['edit'])) {
     }
 }
 
-if ($canManageNoticeModule && isset($_GET['calendar_edit'])) {
+if ($canManageCalendarModule && isset($_GET['calendar_edit'])) {
     $editingCalendarEvent = true;
     $calendarEvent = find_manual_calendar_event_by_id($allManualCalendarEvents, (string) $_GET['calendar_edit']);
     if ($calendarEvent !== null && can_edit_manual_calendar_event($user, $calendarEvent)) {
@@ -769,17 +771,6 @@ $visibleNotices = array_values(array_filter(
 ));
 sort_notices($visibleNotices);
 
-$visibleCalendarEvents = array_values(array_filter(
-    $allManualCalendarEvents,
-    static fn (array $event): bool => can_edit_manual_calendar_event($user, $event)
-));
-usort($visibleCalendarEvents, static function (array $left, array $right): int {
-    $leftKey = (string) (($left['event_date'] ?? '') . ' ' . ($left['start_time'] ?? ''));
-    $rightKey = (string) (($right['event_date'] ?? '') . ' ' . ($right['start_time'] ?? ''));
-
-    return strcmp($rightKey, $leftKey);
-});
-
 $managedUsers = $allUsers;
 usort($managedUsers, static function (array $left, array $right): int {
     $roleOrder = ['dean' => 0, 'admin' => 1, 'program_chair' => 2];
@@ -808,7 +799,7 @@ if (($user['role'] ?? '') === 'dean') {
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Admin Dashboard | NU LIPA SACE</title>
-  <link rel="stylesheet" href="../styles.css?v=20260729-admin-table-badges1">
+  <link rel="stylesheet" href="../styles.css?v=20260729-admin-calendar-table1">
 </head>
 <body class="admin-body">
   <main class="admin-shell">
@@ -870,7 +861,7 @@ if (($user['role'] ?? '') === 'dean') {
             <label class="admin-field">
               <span>Board</span>
               <select name="board_id" required>
-                <?php foreach ($availableBoards as $board): ?>
+                <?php foreach ($availableCalendarBoards as $board): ?>
                   <option value="<?= e($board['id']) ?>" <?= $formNotice['board_id'] === $board['id'] ? 'selected' : '' ?>>
                     <?= e($board['name']) ?>
                   </option>
@@ -1002,7 +993,9 @@ if (($user['role'] ?? '') === 'dean') {
           </div>
         </article>
       </section>
+    <?php endif; ?>
 
+    <?php if ($canManageCalendarModule && (!$totpRequired || $totpEnabled)): ?>
       <section class="admin-grid">
         <article class="admin-editor glass-panel">
           <p class="eyebrow"><?= $editingCalendarEvent ? 'Edit Calendar Entry' : 'Create Calendar Entry' ?></p>
@@ -1056,36 +1049,39 @@ if (($user['role'] ?? '') === 'dean') {
 
         <article class="admin-list glass-panel">
           <p class="eyebrow">Your Calendar Entries</p>
-          <h2>Manual calendar cards you created</h2>
-          <div class="admin-notice-list">
-            <?php if ($visibleCalendarEvents === []): ?>
-              <article class="admin-notice-item">
-                <p class="admin-notice-meta">No manual calendar entries yet.</p>
-              </article>
-            <?php endif; ?>
-
-            <?php foreach ($visibleCalendarEvents as $event): ?>
-              <article class="admin-notice-item">
-                <div class="admin-notice-head">
-                  <div>
-                    <p class="admin-notice-board"><?= e($boardCatalog[$event['board_id']]['name'] ?? $event['board_id']) ?></p>
-                    <h3><?= e((string) $event['title']) ?></h3>
-                  </div>
-                  <p class="notice-date"><?= e((string) $event['event_date']) ?></p>
-                </div>
-                <p class="admin-notice-meta">Time: <?= e((string) $event['start_time']) ?> to <?= e((string) $event['end_time']) ?></p>
-                <p class="admin-notice-meta">Owner: <?= e((string) ($event['created_by_name'] ?? '')) ?></p>
-                <div class="admin-actions">
-                  <a class="secondary-link" href="index.php?calendar_edit=<?= urlencode((string) $event['id']) ?>">Edit</a>
-                  <form method="post" class="admin-inline-form" onsubmit="return confirm('Delete this calendar entry?');">
-                    <input type="hidden" name="csrf_token" value="<?= e(csrf_token()) ?>">
-                    <input type="hidden" name="action" value="delete_calendar_event">
-                    <input type="hidden" name="calendar_event_id" value="<?= e((string) $event['id']) ?>">
-                    <button type="submit" class="admin-delete-btn">Delete</button>
-                  </form>
-                </div>
-              </article>
-            <?php endforeach; ?>
+          <h2>Manual calendar entries you created</h2>
+          <div class="admin-table-toolbar">
+            <label class="admin-table-search">
+              <span>Search Calendar Entries</span>
+              <input type="search" id="adminCalendarSearch" placeholder="Search title, board, date, or time">
+            </label>
+          </div>
+          <div class="admin-table-wrap admin-calendar-table-wrap">
+            <table class="admin-data-table admin-responsive-data-table datatable" id="adminCalendarTable">
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Time</th>
+                  <th>Board</th>
+                  <th>Title</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="adminCalendarTableBody">
+                <tr>
+                  <td colspan="5" class="admin-table-empty">Loading calendar entries...</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p class="admin-table-scrollhint admin-calendar-table-scrollhint">Search or scroll horizontally to review calendar entries and actions.</p>
+          <div class="admin-table-pagination" id="adminCalendarPagination" hidden>
+            <p class="admin-table-pageinfo" id="adminCalendarPageInfo">Showing 0 to 0 of 0 entries</p>
+            <div class="admin-table-pageactions">
+              <button type="button" class="secondary-link admin-table-link" id="adminCalendarPrev">Previous</button>
+              <div class="admin-table-pages" id="adminCalendarPages"></div>
+              <button type="button" class="secondary-link admin-table-link" id="adminCalendarNext">Next</button>
+            </div>
           </div>
         </article>
       </section>
@@ -1268,7 +1264,7 @@ if (($user['role'] ?? '') === 'dean') {
             </label>
           </div>
           <div class="admin-table-wrap admin-user-table-wrap">
-            <table class="admin-data-table admin-user-data-table datatable" id="adminUserTable">
+            <table class="admin-data-table admin-user-data-table admin-responsive-data-table datatable" id="adminUserTable">
               <thead>
                 <tr>
                   <th>User Name</th>
@@ -1709,6 +1705,216 @@ if (($user['role'] ?? '') === 'dean') {
       });
 
       loadNotices();
+    })();
+
+    (() => {
+      const apiUrl = 'calendar-api.php';
+      const csrfToken = <?= json_encode(csrf_token(), JSON_UNESCAPED_SLASHES) ?>;
+      const searchInput = document.getElementById('adminCalendarSearch');
+      const tableBody = document.getElementById('adminCalendarTableBody');
+      const paginationWrap = document.getElementById('adminCalendarPagination');
+      const pageInfo = document.getElementById('adminCalendarPageInfo');
+      const pageButtons = document.getElementById('adminCalendarPages');
+      const prevButton = document.getElementById('adminCalendarPrev');
+      const nextButton = document.getElementById('adminCalendarNext');
+      if (
+        !searchInput
+        || !tableBody
+        || !paginationWrap
+        || !pageInfo
+        || !pageButtons
+        || !prevButton
+        || !nextButton
+      ) {
+        return;
+      }
+
+      let events = [];
+      let filteredEvents = [];
+      let currentPage = 1;
+      const pageSize = 5;
+
+      function escapeHtml(value) {
+        return String(value ?? '')
+          .replaceAll('&', '&amp;')
+          .replaceAll('<', '&lt;')
+          .replaceAll('>', '&gt;')
+          .replaceAll('"', '&quot;')
+          .replaceAll("'", '&#39;');
+      }
+
+      function renderEmptyRow(message) {
+        tableBody.innerHTML = `<tr><td colspan="5" class="admin-table-empty">${escapeHtml(message)}</td></tr>`;
+        paginationWrap.hidden = true;
+      }
+
+      function renderPagination(totalItems) {
+        const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
+        currentPage = Math.min(Math.max(1, currentPage), totalPages);
+        const start = totalItems === 0 ? 0 : ((currentPage - 1) * pageSize) + 1;
+        const end = Math.min(totalItems, currentPage * pageSize);
+
+        pageInfo.textContent = `Showing ${start} to ${end} of ${totalItems} entr${totalItems === 1 ? 'y' : 'ies'}`;
+        paginationWrap.hidden = totalItems <= pageSize;
+        prevButton.disabled = currentPage <= 1;
+        nextButton.disabled = currentPage >= totalPages;
+        pageButtons.innerHTML = Array.from({ length: totalPages }, (_, index) => index + 1)
+          .map((page) => (
+            `<button type="button" class="admin-table-pagebtn${page === currentPage ? ' is-active' : ''}" data-calendar-page="${page}">${page}</button>`
+          ))
+          .join('');
+      }
+
+      function renderRows(items) {
+        if (!Array.isArray(items) || items.length === 0) {
+          renderEmptyRow('No calendar entries match your search.');
+          return;
+        }
+
+        const totalPages = Math.max(1, Math.ceil(items.length / pageSize));
+        currentPage = Math.min(Math.max(1, currentPage), totalPages);
+        const pageStart = (currentPage - 1) * pageSize;
+        const visibleItems = items.slice(pageStart, pageStart + pageSize);
+
+        tableBody.innerHTML = visibleItems.map((event) => `
+          <tr>
+            <td data-label="Date">${escapeHtml(event.event_date || '')}</td>
+            <td data-label="Time">${escapeHtml(event.start_time || '')} to ${escapeHtml(event.end_time || '')}</td>
+            <td data-label="Board">${escapeHtml(event.board_name || '')}</td>
+            <td data-label="Title">
+              <div class="admin-table-title">
+                <strong>${escapeHtml(event.title || '')}</strong>
+                <span>${escapeHtml(event.created_by_name || '')}</span>
+              </div>
+            </td>
+            <td data-label="Actions">
+              <div class="admin-table-actions">
+                <a class="admin-action-badge is-edit" href="${escapeHtml(event.edit_url || '#')}">Edit</a>
+                <button type="button" class="admin-action-badge is-delete" data-calendar-action="delete" data-calendar-id="${escapeHtml(event.id || '')}">Delete</button>
+              </div>
+            </td>
+          </tr>
+        `).join('');
+
+        renderPagination(items.length);
+      }
+
+      function applyFilter() {
+        const query = searchInput.value.trim().toLowerCase();
+        filteredEvents = events.filter((event) => {
+          const haystack = [
+            event.title,
+            event.board_name,
+            event.event_date,
+            event.start_time,
+            event.end_time,
+            event.created_by_name
+          ].join(' ').toLowerCase();
+
+          return query === '' || haystack.includes(query);
+        });
+        currentPage = 1;
+        renderRows(filteredEvents);
+      }
+
+      async function loadEvents() {
+        renderEmptyRow('Loading calendar entries...');
+
+        try {
+          const response = await fetch(apiUrl, {
+            headers: {
+              'Accept': 'application/json'
+            }
+          });
+          const payload = await response.json();
+          if (!response.ok) {
+            throw new Error(payload.error || 'Unable to load calendar entries.');
+          }
+
+          events = Array.isArray(payload.events) ? payload.events : [];
+          filteredEvents = [...events];
+          applyFilter();
+        } catch (error) {
+          renderEmptyRow(error instanceof Error ? error.message : 'Unable to load calendar entries.');
+        }
+      }
+
+      async function deleteEvent(eventId) {
+        if (!window.confirm('Delete this calendar entry?')) {
+          return;
+        }
+
+        const formData = new FormData();
+        formData.set('csrf_token', csrfToken);
+        formData.set('action', 'delete_calendar_event');
+        formData.set('calendar_event_id', eventId);
+
+        try {
+          const response = await fetch(apiUrl, {
+            method: 'POST',
+            body: formData,
+            headers: {
+              'Accept': 'application/json'
+            }
+          });
+          const payload = await response.json();
+          if (!response.ok) {
+            throw new Error(payload.error || 'Unable to delete the calendar entry.');
+          }
+
+          events = events.filter((event) => event.id !== eventId);
+          applyFilter();
+        } catch (error) {
+          window.alert(error instanceof Error ? error.message : 'Unable to delete the calendar entry.');
+        }
+      }
+
+      tableBody.addEventListener('click', (event) => {
+        const target = event.target;
+        if (!(target instanceof HTMLElement) || target.dataset.calendarAction !== 'delete') {
+          return;
+        }
+
+        const eventId = target.dataset.calendarId || '';
+        if (eventId !== '') {
+          deleteEvent(eventId);
+        }
+      });
+
+      pageButtons.addEventListener('click', (event) => {
+        const target = event.target;
+        if (!(target instanceof HTMLElement)) {
+          return;
+        }
+
+        const page = Number.parseInt(target.dataset.calendarPage || '', 10);
+        if (!Number.isInteger(page) || page < 1) {
+          return;
+        }
+
+        currentPage = page;
+        renderRows(filteredEvents);
+      });
+
+      prevButton.addEventListener('click', () => {
+        if (currentPage <= 1) {
+          return;
+        }
+        currentPage -= 1;
+        renderRows(filteredEvents);
+      });
+
+      nextButton.addEventListener('click', () => {
+        const totalPages = Math.max(1, Math.ceil(filteredEvents.length / pageSize));
+        if (currentPage >= totalPages) {
+          return;
+        }
+        currentPage += 1;
+        renderRows(filteredEvents);
+      });
+
+      searchInput.addEventListener('input', applyFilter);
+      loadEvents();
     })();
 
     (() => {

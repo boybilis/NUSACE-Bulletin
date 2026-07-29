@@ -1729,6 +1729,21 @@ function can_manage_notice_module(array $user): bool
     return in_array((string) ($user['role'] ?? ''), ['dean', 'program_chair'], true);
 }
 
+function can_manage_calendar_module(array $user): bool
+{
+    return in_array((string) ($user['role'] ?? ''), ['dean', 'program_chair'], true);
+}
+
+function can_manage_calendar_board(array $user, string $boardId): bool
+{
+    return can_manage_board($user, $boardId);
+}
+
+function accessible_calendar_boards(array $user): array
+{
+    return accessible_boards($user);
+}
+
 function board_ids_for_role(string $role, array $submittedBoardIds = []): array
 {
     if ($role === 'dean') {
