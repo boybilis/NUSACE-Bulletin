@@ -808,7 +808,7 @@ if (($user['role'] ?? '') === 'dean') {
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Admin Dashboard | NU LIPA SACE</title>
-  <link rel="stylesheet" href="../styles.css?v=20260727-admin-notice-table1">
+  <link rel="stylesheet" href="../styles.css?v=20260729-admin-user-table1">
 </head>
 <body class="admin-body">
   <main class="admin-shell">
@@ -1247,69 +1247,102 @@ if (($user['role'] ?? '') === 'dean') {
             </div>
           </form>
 
-          <div class="admin-notice-list" style="margin-top: 24px;">
+          <div class="admin-table-toolbar">
+            <label class="admin-table-search">
+              <span>Search Users</span>
+              <input type="search" id="adminUserSearch" placeholder="Search name, username, or department">
+            </label>
+          </div>
+          <div class="admin-table-wrap admin-user-table-wrap">
+            <table class="admin-data-table admin-user-data-table datatable" id="adminUserTable">
+              <thead>
+                <tr>
+                  <th>User Name</th>
+                  <th>Department</th>
+                  <th>Authenticator</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="adminUserTableBody">
+                <?php foreach ($managedUsers as $account): ?>
+                  <?php
+                    $accountBoardId = primary_board_id_for_user($account);
+                    $accountDepartment = (string) ($boardCatalog[$accountBoardId]['name'] ?? ($accountBoardId !== '' ? $accountBoardId : 'None'));
+                    $isCurrentAccount = (string) $account['username'] === (string) $user['username'];
+                  ?>
+                  <tr data-user-row data-user-search="<?= e(strtolower(implode(' ', [
+                    (string) $account['name'],
+                    (string) $account['username'],
+                    $accountDepartment,
+                  ]))) ?>">
+                    <td data-label="User Name">
+                      <div class="admin-table-title">
+                        <strong><?= e((string) $account['name']) ?></strong>
+                        <?php if ($isCurrentAccount): ?>
+                          <span>Current account</span>
+                        <?php endif; ?>
+                      </div>
+                    </td>
+                    <td data-label="Department"><?= e($accountDepartment) ?></td>
+                    <td data-label="Authenticator"><?= !empty($account['totp_enabled']) ? 'Enabled' : 'Not set' ?></td>
+                    <td data-label="Actions">
+                      <div class="admin-table-actions">
+                        <?php if (!$isCurrentAccount): ?>
+                          <a class="secondary-link admin-table-link" href="index.php?user_edit=<?= urlencode((string) $account['username']) ?>">Edit</a>
+                          <form method="post" class="admin-inline-form" onsubmit="return confirm('Reset this account to its default username and password?');">
+                            <input type="hidden" name="csrf_token" value="<?= e(csrf_token()) ?>">
+                            <input type="hidden" name="action" value="reset_managed_user_account">
+                            <input type="hidden" name="target_username" value="<?= e((string) $account['username']) ?>">
+                            <button type="submit" class="admin-delete-btn admin-table-delete">Reset</button>
+                          </form>
+                          <form method="post" class="admin-inline-form" onsubmit="return confirm('Change this user lock status?');">
+                            <input type="hidden" name="csrf_token" value="<?= e(csrf_token()) ?>">
+                            <input type="hidden" name="action" value="toggle_managed_user_lock">
+                            <input type="hidden" name="target_username" value="<?= e((string) $account['username']) ?>">
+                            <button type="submit" class="admin-delete-btn admin-table-delete"><?= !empty($account['is_locked']) ? 'Unlock' : 'Lock' ?></button>
+                          </form>
+                          <form method="post" class="admin-inline-form" onsubmit="return confirm('Reset this user\\'s authenticator setup?');">
+                            <input type="hidden" name="csrf_token" value="<?= e(csrf_token()) ?>">
+                            <input type="hidden" name="action" value="reset_managed_user_totp">
+                            <input type="hidden" name="target_username" value="<?= e((string) $account['username']) ?>">
+                            <button type="submit" class="admin-delete-btn admin-table-delete">Reset 2FA</button>
+                          </form>
+                        <?php else: ?>
+                          <span class="admin-notice-meta">Use Account Settings</span>
+                        <?php endif; ?>
+                      </div>
+                    </td>
+                  </tr>
+                <?php endforeach; ?>
+                <tr id="adminUserEmptyRow" hidden>
+                  <td colspan="4" class="admin-table-empty">No users match your search.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p class="admin-table-scrollhint admin-user-table-scrollhint">Search or scroll horizontally to review users and account actions.</p>
+
+          <?php if (($user['role'] ?? '') === 'dean'): ?>
             <?php foreach ($managedUsers as $account): ?>
-              <article class="admin-notice-item">
-                <div class="admin-notice-head">
-                  <div>
-                    <p class="admin-notice-board"><?= e(role_label((string) $account['role'])) ?></p>
-                    <h3><?= e((string) $account['name']) ?></h3>
-                  </div>
-                  <p class="notice-date"><?= !empty($account['is_locked']) ? 'Locked' : 'Active' ?></p>
-                </div>
-                <p class="admin-notice-meta">Username: <?= e((string) $account['username']) ?></p>
-                <p class="admin-notice-meta">Default Username: <?= e((string) ($account['default_username'] ?? $account['username'])) ?></p>
-                <p class="admin-notice-meta">Department: <?= e((string) ($boardCatalog[primary_board_id_for_user($account)]['name'] ?? (primary_board_id_for_user($account) !== '' ? primary_board_id_for_user($account) : 'None'))) ?></p>
-                <p class="admin-notice-meta">Authenticator: <?= !empty($account['totp_enabled']) ? 'Enabled' : 'Not set' ?></p>
-                <?php if ((string) $account['username'] === (string) $user['username']): ?>
-                  <p class="admin-notice-meta">Current logged-in account.</p>
-                <?php endif; ?>
-                <div class="admin-actions">
-                  <?php if ((string) $account['username'] !== (string) $user['username']): ?>
-                    <a class="secondary-link" href="index.php?user_edit=<?= urlencode((string) $account['username']) ?>">Edit</a>
-                    <form method="post" class="admin-inline-form" onsubmit="return confirm('Reset this account to its default username and password?');">
-                      <input type="hidden" name="csrf_token" value="<?= e(csrf_token()) ?>">
-                      <input type="hidden" name="action" value="reset_managed_user_account">
-                      <input type="hidden" name="target_username" value="<?= e((string) $account['username']) ?>">
-                      <button type="submit" class="admin-delete-btn">Reset</button>
-                    </form>
-                    <form method="post" class="admin-inline-form" onsubmit="return confirm('Change this user lock status?');">
-                      <input type="hidden" name="csrf_token" value="<?= e(csrf_token()) ?>">
-                      <input type="hidden" name="action" value="toggle_managed_user_lock">
-                      <input type="hidden" name="target_username" value="<?= e((string) $account['username']) ?>">
-                      <button type="submit" class="admin-delete-btn"><?= !empty($account['is_locked']) ? 'Unlock' : 'Lock' ?></button>
-                    </form>
-                    <form method="post" class="admin-inline-form" onsubmit="return confirm('Reset this user\\'s authenticator setup?');">
-                      <input type="hidden" name="csrf_token" value="<?= e(csrf_token()) ?>">
-                      <input type="hidden" name="action" value="reset_managed_user_totp">
-                      <input type="hidden" name="target_username" value="<?= e((string) $account['username']) ?>">
-                      <button type="submit" class="admin-delete-btn">Reset 2FA</button>
-                    </form>
+              <?php $accountBoardId = primary_board_id_for_user($account); ?>
+              <?php if ($accountBoardId !== '' && isset($deanFeedbackByBoard[$accountBoardId])): ?>
+                <div class="admin-feedback-block">
+                  <p class="admin-notice-meta">Feedback for <?= e((string) ($boardCatalog[$accountBoardId]['name'] ?? $accountBoardId)) ?></p>
+                  <?php if ($deanFeedbackByBoard[$accountBoardId] === []): ?>
+                    <p class="admin-notice-meta">No feedback submitted yet.</p>
                   <?php else: ?>
-                    <span class="admin-notice-meta">Use Account Settings for this account.</span>
+                    <?php foreach ($deanFeedbackByBoard[$accountBoardId] as $feedback): ?>
+                      <article class="admin-feedback-item">
+                        <p class="admin-notice-meta"><?= e(feedback_type_label((string) $feedback['type'])) ?> | <?= e(format_datetime_label((string) $feedback['created_at'])) ?></p>
+                        <p class="admin-notice-meta"><?= !empty($feedback['is_anonymous']) ? 'Anonymous sender' : 'Sender email: ' . e((string) $feedback['email']) ?></p>
+                        <p class="admin-notice-body"><?= nl2br(e((string) $feedback['message'])) ?></p>
+                      </article>
+                    <?php endforeach; ?>
                   <?php endif; ?>
                 </div>
-
-                <?php $accountBoardId = primary_board_id_for_user($account); ?>
-                <?php if (($user['role'] ?? '') === 'dean' && $accountBoardId !== '' && isset($deanFeedbackByBoard[$accountBoardId])): ?>
-                  <div class="admin-feedback-block">
-                    <p class="admin-notice-meta">Feedback for <?= e((string) ($boardCatalog[$accountBoardId]['name'] ?? $accountBoardId)) ?></p>
-                    <?php if ($deanFeedbackByBoard[$accountBoardId] === []): ?>
-                      <p class="admin-notice-meta">No feedback submitted yet.</p>
-                    <?php else: ?>
-                      <?php foreach ($deanFeedbackByBoard[$accountBoardId] as $feedback): ?>
-                        <article class="admin-feedback-item">
-                          <p class="admin-notice-meta"><?= e(feedback_type_label((string) $feedback['type'])) ?> | <?= e(format_datetime_label((string) $feedback['created_at'])) ?></p>
-                          <p class="admin-notice-meta"><?= !empty($feedback['is_anonymous']) ? 'Anonymous sender' : 'Sender email: ' . e((string) $feedback['email']) ?></p>
-                          <p class="admin-notice-body"><?= nl2br(e((string) $feedback['message'])) ?></p>
-                        </article>
-                      <?php endforeach; ?>
-                    <?php endif; ?>
-                  </div>
-                <?php endif; ?>
-              </article>
+              <?php endif; ?>
             <?php endforeach; ?>
-          </div>
+          <?php endif; ?>
         </article>
       <?php elseif (($user['role'] ?? '') === 'dean'): ?>
         <article class="admin-list glass-panel">
@@ -1669,6 +1702,35 @@ if (($user['role'] ?? '') === 'dean') {
       });
 
       loadNotices();
+    })();
+
+    (() => {
+      const searchInput = document.getElementById('adminUserSearch');
+      const tableBody = document.getElementById('adminUserTableBody');
+      const emptyRow = document.getElementById('adminUserEmptyRow');
+      if (!searchInput || !tableBody || !emptyRow) {
+        return;
+      }
+
+      const userRows = Array.from(tableBody.querySelectorAll('[data-user-row]'));
+
+      function filterUsers() {
+        const query = searchInput.value.trim().toLowerCase();
+        let visibleCount = 0;
+
+        userRows.forEach((row) => {
+          const searchableText = row.dataset.userSearch || (row.textContent || '').toLowerCase();
+          const matches = query === '' || searchableText.includes(query);
+          row.hidden = !matches;
+          if (matches) {
+            visibleCount += 1;
+          }
+        });
+
+        emptyRow.hidden = visibleCount !== 0;
+      }
+
+      searchInput.addEventListener('input', filterUsers);
     })();
   </script>
 </body>
