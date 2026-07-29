@@ -283,6 +283,200 @@ body::before {
   margin: 8px 0 0;
 }
 
+.news-section {
+  display: grid;
+  gap: 16px;
+  margin-top: 32px;
+}
+
+.news-section[hidden] {
+  display: none;
+}
+
+.news-section-heading {
+  align-items: flex-end;
+}
+
+.news-carousel {
+  position: relative;
+  padding: 20px;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+
+.news-carousel-viewport {
+  width: 100%;
+  overflow: hidden;
+}
+
+.news-carousel-track {
+  display: flex;
+  align-items: stretch;
+  transition: transform 520ms cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: transform;
+}
+
+.news-carousel-slide {
+  flex: 0 0 100%;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-rows: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.news-card {
+  display: flex;
+  min-width: 0;
+  min-height: 100%;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid rgba(0, 58, 112, 0.1);
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 12px 28px rgba(0, 58, 112, 0.08);
+}
+
+.news-card-media {
+  position: relative;
+  display: grid;
+  min-height: 150px;
+  aspect-ratio: 16 / 9;
+  place-items: center;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 25% 20%, rgba(255, 255, 255, 0.2), transparent 32%),
+    linear-gradient(135deg, #1877f2, #0b4da2);
+}
+
+.news-card-media img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.news-card-facebook {
+  display: grid;
+  width: 58px;
+  height: 58px;
+  place-items: center;
+  border: 2px solid rgba(255, 255, 255, 0.86);
+  border-radius: 16px;
+  color: #fff;
+  font-family: Arial, sans-serif;
+  font-size: 2.5rem;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.news-card-body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 10px;
+  padding: 18px;
+}
+
+.news-card-body h3 {
+  margin: 0;
+  color: var(--navy);
+  font-family: "Fraunces", serif;
+  font-size: 1.18rem;
+  line-height: 1.25;
+}
+
+.news-card-summary {
+  display: -webkit-box;
+  margin: 0;
+  overflow: hidden;
+  color: rgba(16, 35, 59, 0.78);
+  line-height: 1.55;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+}
+
+.news-card-date {
+  margin: 0;
+  color: rgba(16, 35, 59, 0.56);
+  font-size: 0.82rem;
+}
+
+.news-card-read-more {
+  align-self: flex-start;
+  margin-top: auto;
+  padding: 9px 14px;
+  border-radius: 10px;
+  background: rgba(0, 58, 112, 0.1);
+  color: var(--navy);
+  font-size: 0.86rem;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.news-card-read-more:hover,
+.news-card-read-more:focus-visible {
+  background: var(--navy);
+  color: var(--gold);
+}
+
+.news-carousel-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.news-carousel-button {
+  display: inline-grid;
+  width: 42px;
+  height: 42px;
+  padding: 0;
+  place-items: center;
+  border: 1px solid rgba(0, 58, 112, 0.12);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.86);
+  color: var(--navy);
+  font: inherit;
+  font-size: 1.2rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.news-carousel-button:hover,
+.news-carousel-button:focus-visible {
+  border-color: rgba(242, 194, 77, 0.72);
+  background: var(--navy);
+  color: var(--gold);
+}
+
+.news-carousel-dots {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  min-height: 12px;
+  margin-top: 16px;
+}
+
+.news-carousel-dot {
+  width: 10px;
+  height: 10px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(0, 58, 112, 0.22);
+  cursor: pointer;
+  transition: width 180ms ease, background 180ms ease;
+}
+
+.news-carousel-dot.is-active {
+  width: 28px;
+  background: var(--navy);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .news-carousel-track {
+    transition: none;
+  }
+}
+
 main {
   display: grid;
   gap: 32px;
@@ -1562,6 +1756,11 @@ main {
   .hero-stats {
     grid-template-columns: repeat(3, 1fr);
   }
+
+  .news-carousel-slide {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-rows: repeat(2, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 720px) {
@@ -1595,6 +1794,20 @@ main {
   .highlight-strip,
   .notice-grid {
     grid-template-columns: 1fr;
+  }
+
+  .news-carousel {
+    padding: 14px;
+  }
+
+  .news-carousel-slide {
+    grid-template-columns: 1fr;
+    grid-template-rows: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+  }
+
+  .news-card-media {
+    min-height: 140px;
   }
 
   .calendar-actions {

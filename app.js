@@ -31,6 +31,13 @@ const calendarStatus = document.getElementById("calendarStatus");
 const calendarOpenLink = document.getElementById("calendarOpenLink");
 const calendarSubscribeLink = document.getElementById("calendarSubscribeLink");
 const calendarMonthSelect = document.getElementById("calendarMonthSelect");
+const newsSection = document.getElementById("newsSection");
+const newsCarousel = document.getElementById("newsCarousel");
+const newsCarouselTrack = document.getElementById("newsCarouselTrack");
+const newsCarouselDots = document.getElementById("newsCarouselDots");
+const newsCarouselControls = document.getElementById("newsCarouselControls");
+const newsCarouselPrev = document.getElementById("newsCarouselPrev");
+const newsCarouselNext = document.getElementById("newsCarouselNext");
 const appHomeButton = document.getElementById("appHomeButton");
 const homeHero = document.getElementById("homeHero");
 const appSections = [...document.querySelectorAll("[data-app-section]")];
@@ -39,7 +46,7 @@ const appBottomLinks = [...document.querySelectorAll(".app-bottom-link[data-nav-
 const noticeUpdateBadges = [...document.querySelectorAll('[data-update-badge="notices"]')];
 const calendarUpdateBadges = [...document.querySelectorAll('[data-update-badge="calendar"]')];
 const CLIENT_ID_KEY = "nusaceBulletinClientId";
-const API_VERSION = "20260730-app-badges1";
+const API_VERSION = "20260730-news-carousel1";
 const MAX_NOTICE_PREVIEW_WORDS = 40;
 const APP_VIEW_KEY = "nusaceBulletinAppView";
 const UPDATE_POLL_INTERVAL = 5 * 60 * 1000;
@@ -58,6 +65,11 @@ let currentAppView = "home";
 let calendarEventsLoaded = false;
 let activeCalendarMonth = "";
 let updatePollingTimer = null;
+let newsItems = [];
+let newsCarouselPage = 0;
+let newsCarouselPageSize = 6;
+let newsCarouselTimer = null;
+let newsCarouselResizeTimer = null;
 const expandedNoticeCards = new Set();
 const clientId = getClientId();
 
@@ -102,6 +114,149 @@ function getClientId() {
     return generated;
   } catch (error) {
     return `client-${Date.now()}-fallback`;
+  }
+}
+
+function newsPageSizeForViewport() {
+  if (window.innerWidth <= 720) {
+    return 2;
+  }
+
+  if (window.innerWidth <= 980) {
+    return 4;
+  }
+
+  return 6;
+}
+
+function newsCarouselPageCount() {
+  return Math.max(1, Math.ceil(newsItems.length / newsCarouselPageSize));
+}
+
+function stopNewsCarousel() {
+  if (newsCarouselTimer !== null) {
+    window.clearInterval(newsCarouselTimer);
+    newsCarouselTimer = null;
+  }
+}
+
+function startNewsCarousel() {
+  stopNewsCarousel();
+  if (
+    newsCarouselPageCount() <= 1
+    || window.matchMedia("(prefers-reduced-motion: reduce)").matches
+    || document.visibilityState !== "visible"
+  ) {
+    return;
+  }
+
+  newsCarouselTimer = window.setInterval(() => {
+    showNewsCarouselPage(newsCarouselPage + 1);
+  }, 7000);
+}
+
+function showNewsCarouselPage(page) {
+  if (!newsCarouselTrack) {
+    return;
+  }
+
+  const pageCount = newsCarouselPageCount();
+  newsCarouselPage = ((page % pageCount) + pageCount) % pageCount;
+  newsCarouselTrack.style.transform = `translateX(-${newsCarouselPage * 100}%)`;
+
+  newsCarouselDots?.querySelectorAll("[data-news-page]").forEach((dot) => {
+    const isActive = Number.parseInt(dot.dataset.newsPage || "", 10) === newsCarouselPage;
+    dot.classList.toggle("is-active", isActive);
+    dot.setAttribute("aria-current", isActive ? "true" : "false");
+  });
+}
+
+function newsCardMarkup(newsItem) {
+  const media = newsItem.image_url
+    ? `<img src="${escapeHtml(newsItem.image_url)}" alt="" loading="lazy" referrerpolicy="no-referrer">`
+    : '<span class="news-card-facebook" aria-hidden="true">f</span>';
+
+  return `
+    <article class="news-card">
+      <div class="news-card-media">
+        ${media}
+      </div>
+      <div class="news-card-body">
+        <p class="eyebrow">Facebook News</p>
+        <h3>${escapeHtml(newsItem.title || "News Update")}</h3>
+        <p class="news-card-summary">${escapeHtml(newsItem.summary || "")}</p>
+        <p class="news-card-date">${escapeHtml(formatDate(newsItem.published_at || ""))}</p>
+        <a class="news-card-read-more" href="${escapeHtml(newsItem.facebook_url || "#")}" target="_blank" rel="noopener noreferrer">Read More</a>
+      </div>
+    </article>
+  `;
+}
+
+function renderNewsCarousel() {
+  if (!newsSection || !newsCarouselTrack || !newsCarouselDots || !newsCarouselControls) {
+    return;
+  }
+
+  if (newsItems.length === 0) {
+    newsSection.hidden = true;
+    stopNewsCarousel();
+    return;
+  }
+
+  newsSection.hidden = false;
+  newsCarouselPageSize = newsPageSizeForViewport();
+  const slides = [];
+  for (let index = 0; index < newsItems.length; index += newsCarouselPageSize) {
+    slides.push(newsItems.slice(index, index + newsCarouselPageSize));
+  }
+
+  newsCarouselTrack.innerHTML = slides.map((slide, slideIndex) => `
+    <div class="news-carousel-slide" role="group" aria-label="News page ${slideIndex + 1} of ${slides.length}">
+      ${slide.map(newsCardMarkup).join("")}
+    </div>
+  `).join("");
+
+  newsCarouselTrack.querySelectorAll(".news-card-media img").forEach((image) => {
+    image.addEventListener("error", () => {
+      image.replaceWith(Object.assign(document.createElement("span"), {
+        className: "news-card-facebook",
+        textContent: "f"
+      }));
+    }, { once: true });
+  });
+
+  newsCarouselDots.innerHTML = slides.length > 1
+    ? slides.map((_, page) => `
+        <button type="button" class="news-carousel-dot${page === 0 ? " is-active" : ""}" data-news-page="${page}" aria-label="Show news page ${page + 1}" aria-current="${page === 0 ? "true" : "false"}"></button>
+      `).join("")
+    : "";
+  newsCarouselControls.hidden = slides.length <= 1;
+  newsCarouselPage = Math.min(newsCarouselPage, slides.length - 1);
+  showNewsCarouselPage(newsCarouselPage);
+  startNewsCarousel();
+}
+
+async function loadNewsLinks() {
+  if (!newsSection) {
+    return;
+  }
+
+  try {
+    const response = await fetch("api/news.php", {
+      cache: "no-store",
+      headers: {
+        "Accept": "application/json"
+      }
+    });
+    const payload = await response.json();
+    if (!response.ok) {
+      throw new Error(payload.error || "Unable to load news links.");
+    }
+
+    newsItems = Array.isArray(payload.news) ? payload.news : [];
+    renderNewsCarousel();
+  } catch (error) {
+    newsSection.hidden = true;
   }
 }
 
@@ -1378,6 +1533,50 @@ calendarMonthSelect?.addEventListener("change", () => {
   loadCalendarEvents(true, nextMonth);
 });
 
+newsCarouselPrev?.addEventListener("click", () => {
+  showNewsCarouselPage(newsCarouselPage - 1);
+  startNewsCarousel();
+});
+
+newsCarouselNext?.addEventListener("click", () => {
+  showNewsCarouselPage(newsCarouselPage + 1);
+  startNewsCarousel();
+});
+
+newsCarouselDots?.addEventListener("click", (event) => {
+  const target = event.target;
+  if (!(target instanceof HTMLElement)) {
+    return;
+  }
+
+  const page = Number.parseInt(target.dataset.newsPage || "", 10);
+  if (!Number.isInteger(page) || page < 0) {
+    return;
+  }
+
+  showNewsCarouselPage(page);
+  startNewsCarousel();
+});
+
+newsCarousel?.addEventListener("mouseenter", stopNewsCarousel);
+newsCarousel?.addEventListener("mouseleave", startNewsCarousel);
+newsCarousel?.addEventListener("focusin", stopNewsCarousel);
+newsCarousel?.addEventListener("focusout", startNewsCarousel);
+
+window.addEventListener("resize", () => {
+  if (newsCarouselResizeTimer !== null) {
+    window.clearTimeout(newsCarouselResizeTimer);
+  }
+
+  newsCarouselResizeTimer = window.setTimeout(() => {
+    const nextPageSize = newsPageSizeForViewport();
+    if (nextPageSize !== newsCarouselPageSize) {
+      newsCarouselPage = 0;
+      renderNewsCarousel();
+    }
+  }, 180);
+});
+
 attachmentModalClose?.addEventListener("click", closeAttachmentModal);
 attachmentModal?.addEventListener("click", (event) => {
   if (event.target instanceof HTMLElement && event.target.hasAttribute("data-close-attachment-modal")) {
@@ -1452,6 +1651,9 @@ if ("serviceWorker" in navigator) {
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "visible") {
     checkForAppUpdates(true);
+    startNewsCarousel();
+  } else {
+    stopNewsCarousel();
   }
 });
 
@@ -1460,3 +1662,4 @@ initializeBottomNav();
 refreshNotificationButton();
 showAppView(initialAppView(), { scroll: false, persist: false });
 loadBoards();
+loadNewsLinks();

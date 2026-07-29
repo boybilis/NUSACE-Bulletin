@@ -288,6 +288,117 @@ function manual_calendar_events_for_public(): array
     return $events;
 }
 
+function normalize_news_link_record(array $newsLink): array
+{
+    return [
+        'id' => (int) ($newsLink['id'] ?? 0),
+        'title' => trim((string) ($newsLink['title'] ?? '')),
+        'summary' => trim((string) ($newsLink['summary'] ?? '')),
+        'facebook_url' => trim((string) ($newsLink['facebook_url'] ?? '')),
+        'image_url' => trim((string) ($newsLink['image_url'] ?? '')),
+        'created_by' => trim((string) ($newsLink['created_by'] ?? '')),
+        'created_at' => mysql_datetime_to_iso8601((string) ($newsLink['created_at'] ?? '')),
+        'updated_at' => mysql_datetime_to_iso8601((string) ($newsLink['updated_at'] ?? '')),
+    ];
+}
+
+function all_news_links(?PDO $pdo = null): array
+{
+    $pdo ??= database();
+
+    try {
+        $statement = $pdo->query('
+            SELECT id, title, summary, facebook_url, image_url, created_by, created_at, updated_at
+            FROM news_links
+            ORDER BY created_at DESC, id DESC
+        ');
+    } catch (Throwable $exception) {
+        if (is_missing_table_exception($exception, 'news_links')) {
+            return [];
+        }
+
+        throw $exception;
+    }
+
+    return array_map('normalize_news_link_record', $statement->fetchAll());
+}
+
+function find_news_link_by_id(array $newsLinks, int $id): ?array
+{
+    foreach ($newsLinks as $newsLink) {
+        if ((int) ($newsLink['id'] ?? 0) === $id) {
+            return $newsLink;
+        }
+    }
+
+    return null;
+}
+
+function save_news_link(array $newsLink): int
+{
+    return database_transaction(static function (PDO $pdo) use ($newsLink): int {
+        $record = normalize_news_link_record($newsLink);
+        $now = gmdate('Y-m-d H:i:s');
+
+        if ($record['id'] > 0) {
+            $statement = $pdo->prepare('
+                UPDATE news_links
+                SET title = :title,
+                    summary = :summary,
+                    facebook_url = :facebook_url,
+                    image_url = :image_url,
+                    updated_at = :updated_at
+                WHERE id = :id
+            ');
+            $statement->execute([
+                ':id' => $record['id'],
+                ':title' => $record['title'],
+                ':summary' => $record['summary'],
+                ':facebook_url' => $record['facebook_url'],
+                ':image_url' => $record['image_url'] !== '' ? $record['image_url'] : null,
+                ':updated_at' => $now,
+            ]);
+
+            if ($statement->rowCount() === 0 && find_news_link_by_id(all_news_links($pdo), $record['id']) === null) {
+                throw new RuntimeException('News link not found.');
+            }
+
+            return $record['id'];
+        }
+
+        $statement = $pdo->prepare('
+            INSERT INTO news_links (
+                title, summary, facebook_url, image_url, created_by, created_at, updated_at
+            ) VALUES (
+                :title, :summary, :facebook_url, :image_url, :created_by, :created_at, :updated_at
+            )
+        ');
+        $statement->execute([
+            ':title' => $record['title'],
+            ':summary' => $record['summary'],
+            ':facebook_url' => $record['facebook_url'],
+            ':image_url' => $record['image_url'] !== '' ? $record['image_url'] : null,
+            ':created_by' => $record['created_by'],
+            ':created_at' => $now,
+            ':updated_at' => $now,
+        ]);
+
+        return (int) $pdo->lastInsertId();
+    });
+}
+
+function delete_news_link(int $id): void
+{
+    database_transaction(static function (PDO $pdo) use ($id): void {
+        $statement = $pdo->prepare('DELETE FROM news_links WHERE id = :id');
+        $statement->execute([':id' => $id]);
+
+        if ($statement->rowCount() === 0) {
+            throw new RuntimeException('News link not found.');
+        }
+    });
+}
+
 function attachment_public_path(string $filename): string
 {
     return 'uploads/attachments/' . ltrim(str_replace('\\', '/', $filename), '/');

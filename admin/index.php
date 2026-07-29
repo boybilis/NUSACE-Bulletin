@@ -13,11 +13,13 @@ $noticeCategories = notice_categories();
 $canManageUsers = can_manage_users($user);
 $canManageNoticeModule = can_manage_notice_module($user);
 $canManageCalendarModule = can_manage_calendar_module($user);
+$canManageNewsLinks = ($user['role'] ?? '') === 'admin';
 $availableBoards = accessible_boards($user);
 $availableCalendarBoards = accessible_calendar_boards($user);
 $allNotices = all_notices();
 $allManualCalendarEvents = all_manual_calendar_events();
 $allUsers = all_users();
+$allNewsLinks = $canManageNewsLinks ? all_news_links() : [];
 $today = today_ymd();
 $totpRequired = user_requires_totp($user);
 $totpEnabled = user_has_totp_enabled($user);
@@ -65,9 +67,18 @@ $formCalendarEvent = [
     'created_by_name' => (string) $user['name'],
 ];
 
+$newsLinkForm = [
+    'id' => 0,
+    'title' => '',
+    'summary' => '',
+    'facebook_url' => '',
+    'image_url' => '',
+];
+
 $editing = false;
 $editingCalendarEvent = false;
 $editingManagedUser = false;
+$editingNewsLink = false;
 $error = '';
 $success = '';
 $accountSuccess = '';
@@ -315,6 +326,104 @@ try {
             });
 
             header('Location: index.php?success=Calendar entry saved');
+            exit;
+        }
+
+        if ($action === 'save_news_link') {
+            if (!$canManageNewsLinks) {
+                throw new RuntimeException('Only admin users can manage news links.');
+            }
+
+            $newsId = max(0, (int) ($_POST['news_id'] ?? 0));
+            $title = trim((string) ($_POST['news_title'] ?? ''));
+            $summary = trim((string) ($_POST['news_summary'] ?? ''));
+            $facebookUrl = trim((string) ($_POST['facebook_url'] ?? ''));
+            $imageUrl = trim((string) ($_POST['image_url'] ?? ''));
+            $newsLinkForm = [
+                'id' => $newsId,
+                'title' => $title,
+                'summary' => $summary,
+                'facebook_url' => $facebookUrl,
+                'image_url' => $imageUrl,
+            ];
+            $editingNewsLink = $newsId > 0;
+
+            if ($title === '' || $summary === '' || $facebookUrl === '') {
+                throw new RuntimeException('Title, description, and Facebook URL are required.');
+            }
+
+            if (strlen($title) > 255) {
+                throw new RuntimeException('News title must be 255 characters or fewer.');
+            }
+
+            if (strlen($summary) > 1000) {
+                throw new RuntimeException('News description must be 1,000 characters or fewer.');
+            }
+
+            $facebookParts = parse_url($facebookUrl);
+            $facebookHost = strtolower((string) ($facebookParts['host'] ?? ''));
+            $isFacebookHost = $facebookHost === 'facebook.com'
+                || str_ends_with($facebookHost, '.facebook.com')
+                || $facebookHost === 'fb.watch';
+            if (
+                filter_var($facebookUrl, FILTER_VALIDATE_URL) === false
+                || strtolower((string) ($facebookParts['scheme'] ?? '')) !== 'https'
+                || !$isFacebookHost
+            ) {
+                throw new RuntimeException('Enter a valid HTTPS Facebook or fb.watch URL.');
+            }
+
+            if ($imageUrl !== '') {
+                $imageParts = parse_url($imageUrl);
+                if (
+                    filter_var($imageUrl, FILTER_VALIDATE_URL) === false
+                    || strtolower((string) ($imageParts['scheme'] ?? '')) !== 'https'
+                ) {
+                    throw new RuntimeException('The optional image must use a valid HTTPS URL.');
+                }
+            }
+
+            try {
+                save_news_link([
+                    'id' => $newsId,
+                    'title' => $title,
+                    'summary' => $summary,
+                    'facebook_url' => $facebookUrl,
+                    'image_url' => $imageUrl,
+                    'created_by' => (string) $user['username'],
+                ]);
+            } catch (Throwable $exception) {
+                if (is_missing_table_exception($exception, 'news_links')) {
+                    throw new RuntimeException('Install the news links database upgrade before publishing news.');
+                }
+
+                throw $exception;
+            }
+
+            header('Location: index.php?success=' . urlencode($newsId > 0 ? 'News link updated' : 'News link published'));
+            exit;
+        }
+
+        if ($action === 'delete_news_link') {
+            if (!$canManageNewsLinks) {
+                throw new RuntimeException('Only admin users can manage news links.');
+            }
+
+            $newsId = max(0, (int) ($_POST['news_id'] ?? 0));
+            if ($newsId <= 0) {
+                throw new RuntimeException('News link not found.');
+            }
+
+            try {
+                delete_news_link($newsId);
+            } catch (Throwable $exception) {
+                if (is_missing_table_exception($exception, 'news_links')) {
+                    throw new RuntimeException('Install the news links database upgrade before managing news.');
+                }
+
+                throw $exception;
+            }
+            header('Location: index.php?success=News+link+deleted');
             exit;
         }
 
@@ -758,6 +867,17 @@ if ($canManageUsers && isset($_GET['user_edit'])) {
     }
 }
 
+if ($canManageNewsLinks && isset($_GET['news_edit'])) {
+    $editingNewsLink = true;
+    $newsLink = find_news_link_by_id($allNewsLinks, max(0, (int) $_GET['news_edit']));
+    if ($newsLink !== null) {
+        $newsLinkForm = $newsLink;
+    } else {
+        $error = 'Unable to edit the selected news link.';
+        $editingNewsLink = false;
+    }
+}
+
 $success = trim((string) ($_GET['success'] ?? ''));
 $accountSuccess = trim((string) ($_GET['account_success'] ?? ''));
 $userSuccess = trim((string) ($_GET['user_success'] ?? ''));
@@ -812,7 +932,7 @@ if (($user['role'] ?? '') === 'dean') {
           <?php if (($user['role'] ?? '') === 'dean'): ?>
             Dean access: publish and manage official announcements across all bulletin boards, and manage administrator accounts.
           <?php elseif (($user['role'] ?? '') === 'admin'): ?>
-            Admin access: manage user accounts, departments, resets, and lock status.
+            Admin access: manage user accounts, departments, resets, lock status, home-page news links, and database backups.
           <?php elseif (($user['role'] ?? '') === 'student_officer'): ?>
             Student officer access: publish notices and calendar entries for your assigned academic department, and manage only the content you personally created.
           <?php else: ?>
@@ -1086,6 +1206,97 @@ if (($user['role'] ?? '') === 'dean') {
               <button type="button" class="secondary-link admin-table-link" id="adminCalendarNext">Next</button>
             </div>
           </div>
+        </article>
+      </section>
+    <?php endif; ?>
+
+    <?php if ($canManageNewsLinks && (!$totpRequired || $totpEnabled)): ?>
+      <section class="admin-grid">
+        <article class="admin-editor glass-panel">
+          <p class="eyebrow"><?= $editingNewsLink ? 'Edit News Link' : 'Publish News Link' ?></p>
+          <h2><?= $editingNewsLink ? 'Update the selected home-page news card' : 'Add a Facebook news link to the home page' ?></h2>
+          <form method="post" class="admin-form-stack">
+            <input type="hidden" name="csrf_token" value="<?= e(csrf_token()) ?>">
+            <input type="hidden" name="action" value="save_news_link">
+            <input type="hidden" name="news_id" value="<?= (int) ($newsLinkForm['id'] ?? 0) ?>">
+
+            <label class="admin-field">
+              <span>Title</span>
+              <input type="text" name="news_title" maxlength="255" value="<?= e((string) ($newsLinkForm['title'] ?? '')) ?>" required>
+            </label>
+
+            <label class="admin-field">
+              <span>Short Description</span>
+              <textarea name="news_summary" rows="5" maxlength="1000" required><?= e((string) ($newsLinkForm['summary'] ?? '')) ?></textarea>
+              <small class="admin-field-help">A concise summary displayed on the news card.</small>
+            </label>
+
+            <label class="admin-field">
+              <span>Facebook URL</span>
+              <input type="url" name="facebook_url" placeholder="https://web.facebook.com/share/p/..." value="<?= e((string) ($newsLinkForm['facebook_url'] ?? '')) ?>" required>
+              <small class="admin-field-help">Use a secure facebook.com or fb.watch post URL.</small>
+            </label>
+
+            <label class="admin-field">
+              <span>Image URL (Optional)</span>
+              <input type="url" name="image_url" placeholder="https://..." value="<?= e((string) ($newsLinkForm['image_url'] ?? '')) ?>">
+              <small class="admin-field-help">Use a direct HTTPS image URL. A Facebook placeholder is shown when left blank.</small>
+            </label>
+
+            <div class="admin-actions">
+              <button type="submit" class="install-btn admin-submit"><?= $editingNewsLink ? 'Update News Link' : 'Publish News Link' ?></button>
+              <?php if ($editingNewsLink): ?>
+                <a class="secondary-link" href="index.php">Cancel</a>
+              <?php endif; ?>
+            </div>
+          </form>
+        </article>
+
+        <article class="admin-list glass-panel">
+          <p class="eyebrow">Home Page News</p>
+          <h2>Published Facebook news links</h2>
+          <div class="admin-table-wrap">
+            <table class="admin-data-table admin-responsive-data-table datatable">
+              <thead>
+                <tr>
+                  <th>Published</th>
+                  <th>Title</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                <?php if ($allNewsLinks === []): ?>
+                  <tr>
+                    <td colspan="3" class="admin-table-empty">No news links published yet.</td>
+                  </tr>
+                <?php endif; ?>
+                <?php foreach ($allNewsLinks as $newsLink): ?>
+                  <tr>
+                    <td data-label="Published"><?= e(format_datetime_label((string) ($newsLink['created_at'] ?? ''))) ?></td>
+                    <td data-label="Title">
+                      <div class="admin-table-title">
+                        <strong><?= e((string) ($newsLink['title'] ?? '')) ?></strong>
+                        <span><?= e((string) ($newsLink['facebook_url'] ?? '')) ?></span>
+                      </div>
+                    </td>
+                    <td data-label="Actions">
+                      <div class="admin-table-actions">
+                        <a class="admin-action-badge is-view" href="<?= e((string) ($newsLink['facebook_url'] ?? '#')) ?>" target="_blank" rel="noopener">View</a>
+                        <a class="admin-action-badge is-edit" href="index.php?news_edit=<?= (int) ($newsLink['id'] ?? 0) ?>">Edit</a>
+                        <form method="post" class="admin-inline-form" onsubmit="return confirm('Delete this news link?');">
+                          <input type="hidden" name="csrf_token" value="<?= e(csrf_token()) ?>">
+                          <input type="hidden" name="action" value="delete_news_link">
+                          <input type="hidden" name="news_id" value="<?= (int) ($newsLink['id'] ?? 0) ?>">
+                          <button type="submit" class="admin-action-badge is-delete">Delete</button>
+                        </form>
+                      </div>
+                    </td>
+                  </tr>
+                <?php endforeach; ?>
+              </tbody>
+            </table>
+          </div>
+          <p class="admin-table-scrollhint">News cards appear newest first on the public home-page carousel.</p>
         </article>
       </section>
     <?php endif; ?>

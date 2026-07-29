@@ -8,6 +8,7 @@ SET NAMES utf8mb4;
 SET FOREIGN_KEY_CHECKS = 0;
 
 DROP TABLE IF EXISTS `notice_reactions`;
+DROP TABLE IF EXISTS `news_links`;
 DROP TABLE IF EXISTS `manual_calendar_events`;
 DROP TABLE IF EXISTS `feedback_pending`;
 DROP TABLE IF EXISTS `feedback`;
@@ -140,6 +141,31 @@ CREATE TABLE `manual_calendar_events` (
   KEY `idx_manual_calendar_board` (`board_id`),
   KEY `idx_manual_calendar_owner` (`created_by`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `news_links` (
+  `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `title` VARCHAR(255) NOT NULL,
+  `summary` TEXT NOT NULL,
+  `facebook_url` VARCHAR(1000) NOT NULL,
+  `image_url` VARCHAR(1000) NULL,
+  `created_by` VARCHAR(100) NOT NULL,
+  `created_at` DATETIME NOT NULL,
+  `updated_at` DATETIME NOT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_news_links_created` (`created_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+INSERT INTO `news_links` (
+  `title`, `summary`, `facebook_url`, `image_url`, `created_by`, `created_at`, `updated_at`
+) VALUES (
+  'NU Lipa SACE Facebook Update',
+  'Read the latest news and community update shared through the official Facebook post.',
+  'https://web.facebook.com/share/1DcLmfCW5W/',
+  NULL,
+  'admin.user',
+  NOW(),
+  NOW()
+);
 
 INSERT INTO `users` (`id`, `username`, `name`, `role`, `default_username`, `default_password_hash`, `password_hash`, `is_locked`, `totp_secret`, `totp_enabled`, `totp_enabled_at`) VALUES
   (1, 'dean', 'SACE Dean', 'dean', 'dean', '$2y$10$N4drRGJT7fJg34Lnfv7VEe1Ql5xlkIh2lY0.3VsYOcHNvhEOs8f/y', '$2y$10$N4drRGJT7fJg34Lnfv7VEe1Ql5xlkIh2lY0.3VsYOcHNvhEOs8f/y', 0, NULL, 0, NULL),

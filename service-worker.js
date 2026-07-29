@@ -1,4 +1,4 @@
-const CACHE_NAME = "nusace-bulletin-v16";
+const CACHE_NAME = "nusace-bulletin-v17";
 const UPDATE_STATE_CACHE = "nusace-bulletin-update-state-v1";
 const UPDATE_STATE_URL = new URL("./__update-state__.json", self.location.href).href;
 const UPDATE_CHECK_URL = new URL("./api/updates.php", self.location.href).href;
