@@ -92,7 +92,8 @@ $totpStep = $pendingUser !== null || (($_GET['step'] ?? '') === 'totp');
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Admin Login | NU LIPA SACE</title>
-  <link rel="stylesheet" href="../styles.css?v=20260726-admin-2fa1">
+  <link rel="stylesheet" href="../styles.css?v=20260730-password-toggle1">
+  <script src="../password-toggle.js?v=20260730-password-toggle1" defer></script>
 </head>
 <body class="admin-body">
   <main class="admin-shell admin-login-shell">

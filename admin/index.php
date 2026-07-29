@@ -799,7 +799,8 @@ if (($user['role'] ?? '') === 'dean') {
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Admin Dashboard | NU LIPA SACE</title>
-  <link rel="stylesheet" href="../styles.css?v=20260729-admin-calendar-table1">
+  <link rel="stylesheet" href="../styles.css?v=20260730-password-toggle1">
+  <script src="../password-toggle.js?v=20260730-password-toggle1" defer></script>
 </head>
 <body class="admin-body">
   <main class="admin-shell">
