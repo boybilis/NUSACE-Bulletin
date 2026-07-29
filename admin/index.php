@@ -808,7 +808,7 @@ if (($user['role'] ?? '') === 'dean') {
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Admin Dashboard | NU LIPA SACE</title>
-  <link rel="stylesheet" href="../styles.css?v=20260729-admin-user-table1">
+  <link rel="stylesheet" href="../styles.css?v=20260729-admin-user-table2">
 </head>
 <body class="admin-body">
   <main class="admin-shell">
@@ -1302,24 +1302,24 @@ if (($user['role'] ?? '') === 'dean') {
                     <td data-label="Actions">
                       <div class="admin-table-actions">
                         <?php if (!$isCurrentAccount): ?>
-                          <a class="secondary-link admin-table-link" href="index.php?user_edit=<?= urlencode((string) $account['username']) ?>">Edit</a>
+                          <a class="admin-user-action-badge is-edit" href="index.php?user_edit=<?= urlencode((string) $account['username']) ?>">Edit</a>
                           <form method="post" class="admin-inline-form" onsubmit="return confirm('Reset this account to its default username and password?');">
                             <input type="hidden" name="csrf_token" value="<?= e(csrf_token()) ?>">
                             <input type="hidden" name="action" value="reset_managed_user_account">
                             <input type="hidden" name="target_username" value="<?= e((string) $account['username']) ?>">
-                            <button type="submit" class="admin-delete-btn admin-table-delete">Reset</button>
+                            <button type="submit" class="admin-user-action-badge is-reset">Reset</button>
                           </form>
                           <form method="post" class="admin-inline-form" onsubmit="return confirm('Change this user lock status?');">
                             <input type="hidden" name="csrf_token" value="<?= e(csrf_token()) ?>">
                             <input type="hidden" name="action" value="toggle_managed_user_lock">
                             <input type="hidden" name="target_username" value="<?= e((string) $account['username']) ?>">
-                            <button type="submit" class="admin-delete-btn admin-table-delete"><?= !empty($account['is_locked']) ? 'Unlock' : 'Lock' ?></button>
+                            <button type="submit" class="admin-user-action-badge <?= !empty($account['is_locked']) ? 'is-unlock' : 'is-lock' ?>"><?= !empty($account['is_locked']) ? 'Unlock' : 'Lock' ?></button>
                           </form>
                           <form method="post" class="admin-inline-form" onsubmit="return confirm('Reset this user\\'s authenticator setup?');">
                             <input type="hidden" name="csrf_token" value="<?= e(csrf_token()) ?>">
                             <input type="hidden" name="action" value="reset_managed_user_totp">
                             <input type="hidden" name="target_username" value="<?= e((string) $account['username']) ?>">
-                            <button type="submit" class="admin-delete-btn admin-table-delete">Reset 2FA</button>
+                            <button type="submit" class="admin-user-action-badge is-2fa">Reset 2FA</button>
                           </form>
                         <?php else: ?>
                           <span class="admin-notice-meta">Use Account Settings</span>
