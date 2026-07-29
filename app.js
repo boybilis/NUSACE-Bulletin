@@ -3,6 +3,7 @@ const boardPanel = document.getElementById("boardPanel");
 const highlightStrip = document.getElementById("highlightStrip");
 const noticeTemplate = document.getElementById("noticeTemplate");
 const installButton = document.getElementById("installButton");
+const notificationButton = document.getElementById("notificationButton");
 const tagFilterBar = document.getElementById("tagFilterBar");
 const activeTagChip = document.getElementById("activeTagChip");
 const clearTagFilter = document.getElementById("clearTagFilter");
@@ -35,10 +36,13 @@ const homeHero = document.getElementById("homeHero");
 const appSections = [...document.querySelectorAll("[data-app-section]")];
 const appViewLinks = [...document.querySelectorAll("[data-app-view]")];
 const appBottomLinks = [...document.querySelectorAll(".app-bottom-link[data-nav-section]")];
+const noticeUpdateBadges = [...document.querySelectorAll('[data-update-badge="notices"]')];
+const calendarUpdateBadges = [...document.querySelectorAll('[data-update-badge="calendar"]')];
 const CLIENT_ID_KEY = "nusaceBulletinClientId";
-const API_VERSION = "20260602-admin20";
+const API_VERSION = "20260730-app-badges1";
 const MAX_NOTICE_PREVIEW_WORDS = 40;
 const APP_VIEW_KEY = "nusaceBulletinAppView";
+const UPDATE_POLL_INTERVAL = 5 * 60 * 1000;
 
 let deferredPrompt;
 let boards = [];
@@ -53,6 +57,7 @@ let feedbackOtpTimer = null;
 let currentAppView = "home";
 let calendarEventsLoaded = false;
 let activeCalendarMonth = "";
+let updatePollingTimer = null;
 const expandedNoticeCards = new Set();
 const clientId = getClientId();
 
@@ -98,6 +103,146 @@ function getClientId() {
   } catch (error) {
     return `client-${Date.now()}-fallback`;
   }
+}
+
+function renderUpdateBadge(badges, count, label) {
+  badges.forEach((badge) => {
+    badge.hidden = count <= 0;
+    badge.textContent = count > 99 ? "99+" : String(count);
+    badge.setAttribute("aria-label", `${count} new ${label}`);
+  });
+}
+
+async function updateApplicationBadge(total) {
+  try {
+    if (typeof navigator.setAppBadge === "function") {
+      if (total > 0) {
+        await navigator.setAppBadge(total);
+      } else if (typeof navigator.clearAppBadge === "function") {
+        await navigator.clearAppBadge();
+      }
+    }
+  } catch (error) {
+  }
+}
+
+function applyUpdateCounts(counts = {}) {
+  const noticeCount = Math.max(0, Number(counts.notices) || 0);
+  const calendarCount = Math.max(0, Number(counts.calendar) || 0);
+  renderUpdateBadge(noticeUpdateBadges, noticeCount, noticeCount === 1 ? "notice" : "notices");
+  renderUpdateBadge(calendarUpdateBadges, calendarCount, calendarCount === 1 ? "calendar entry" : "calendar entries");
+  updateApplicationBadge(noticeCount + calendarCount);
+}
+
+function postServiceWorkerMessage(message) {
+  if (!("serviceWorker" in navigator)) {
+    return;
+  }
+
+  navigator.serviceWorker.ready
+    .then((registration) => {
+      const worker = registration.active || navigator.serviceWorker.controller;
+      worker?.postMessage(message);
+    })
+    .catch(() => {});
+}
+
+function checkForAppUpdates(notify = true) {
+  postServiceWorkerMessage({
+    type: "CHECK_UPDATES",
+    notify
+  });
+}
+
+function markAppUpdatesRead(category) {
+  postServiceWorkerMessage({
+    type: "MARK_UPDATES_READ",
+    category
+  });
+}
+
+function refreshNotificationButton() {
+  if (!notificationButton) {
+    return;
+  }
+
+  const supported = "Notification" in window && "serviceWorker" in navigator;
+  notificationButton.hidden = !supported || Notification.permission !== "default";
+}
+
+async function enableAppNotifications() {
+  if (!("Notification" in window) || !("serviceWorker" in navigator)) {
+    return;
+  }
+
+  let permission = "default";
+  try {
+    permission = await Notification.requestPermission();
+  } catch (error) {
+    return;
+  }
+  refreshNotificationButton();
+  if (permission !== "granted") {
+    return;
+  }
+
+  try {
+    const registration = await navigator.serviceWorker.ready;
+    await registration.showNotification("NU Lipa SACE Bulletin", {
+      body: "Notifications are enabled for new notices and calendar entries.",
+      icon: "assets/img/icon-192.png",
+      badge: "assets/img/favicon-32.png",
+      tag: "nusace-bulletin-notifications-enabled",
+      data: {
+        url: "./"
+      }
+    });
+    checkForAppUpdates(false);
+  } catch (error) {
+  }
+}
+
+async function registerBackgroundUpdateChecks(registration) {
+  try {
+    if ("periodicSync" in registration) {
+      let permissionAllowed = true;
+      if ("permissions" in navigator) {
+        try {
+          const status = await navigator.permissions.query({
+            name: "periodic-background-sync"
+          });
+          permissionAllowed = status.state !== "denied";
+        } catch (error) {
+        }
+      }
+
+      if (permissionAllowed) {
+        await registration.periodicSync.register("nusace-bulletin-updates", {
+          minInterval: 15 * 60 * 1000
+        });
+      }
+    }
+  } catch (error) {
+  }
+
+  try {
+    if ("sync" in registration) {
+      await registration.sync.register("nusace-bulletin-updates");
+    }
+  } catch (error) {
+  }
+}
+
+function startForegroundUpdateChecks() {
+  if (updatePollingTimer !== null) {
+    window.clearInterval(updatePollingTimer);
+  }
+
+  updatePollingTimer = window.setInterval(() => {
+    if (document.visibilityState === "visible") {
+      checkForAppUpdates(true);
+    }
+  }, UPDATE_POLL_INTERVAL);
 }
 
 function formatDate(value) {
@@ -893,7 +1038,11 @@ function showAppView(view, options = {}) {
   }
 
   setActiveBottomNav(view);
+  if (view === "boards" || view === "highlights") {
+    markAppUpdatesRead("notices");
+  }
   if (view === "calendar") {
+    markAppUpdatesRead("calendar");
     loadCalendarEvents();
   }
   if (scroll) {
@@ -1184,6 +1333,10 @@ installButton.addEventListener("click", async () => {
   installButton.hidden = true;
 });
 
+notificationButton?.addEventListener("click", () => {
+  enableAppNotifications();
+});
+
 clearTagFilter?.addEventListener("click", () => {
   activeTag = null;
   renderBoard(activeBoardId || "sace");
@@ -1273,7 +1426,17 @@ if ("serviceWorker" in navigator) {
       });
 
       registration.update().catch(() => {});
+      registerBackgroundUpdateChecks(registration);
+      registration.active?.postMessage({ type: "GET_UPDATE_COUNTS" });
+      registration.active?.postMessage({ type: "CHECK_UPDATES", notify: true });
+      startForegroundUpdateChecks();
     }).catch(() => {});
+  });
+
+  navigator.serviceWorker.addEventListener("message", (event) => {
+    if (event.data?.type === "UPDATE_COUNTS") {
+      applyUpdateCounts(event.data.counts || {});
+    }
   });
 
   navigator.serviceWorker.addEventListener("controllerchange", () => {
@@ -1286,7 +1449,14 @@ if ("serviceWorker" in navigator) {
   });
 }
 
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible") {
+    checkForAppUpdates(true);
+  }
+});
+
 initializeNoticeCardCollapseHandlers();
 initializeBottomNav();
+refreshNotificationButton();
 showAppView(initialAppView(), { scroll: false, persist: false });
 loadBoards();

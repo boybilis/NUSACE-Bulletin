@@ -16,7 +16,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Fraunces:opsz,wght@9..144,600;9..144,700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="styles.css?v=20260727-calendar-manual1" />
+  <link rel="stylesheet" href="styles.css?v=20260730-app-badges1" />
   <title>NU Lipa SACE Bulletin Board</title>
 </head>
 <body>
@@ -41,7 +41,10 @@
           <p class="eyebrow">NU LIPA SACE Academic Bulletin</p>
           <h1>Official academic bulletin boards for NU LIPA School of Architecture, Computing and Engineering.</h1>
         </div>
-        <button class="install-btn" id="installButton" hidden>Install App</button>
+        <div class="topbar-actions">
+          <button class="install-btn" id="installButton" hidden>Install App</button>
+          <button class="secondary-link notification-btn" id="notificationButton" type="button" hidden>Enable Notifications</button>
+        </div>
       </nav>
 
       <div class="hero-grid">
@@ -204,14 +207,17 @@
     <a href="#boards" class="app-bottom-link" data-nav-section="boards" data-app-view="boards">
       <span class="app-bottom-icon" aria-hidden="true">▦</span>
       <span class="app-bottom-label">Boards</span>
+      <span class="app-nav-badge" data-update-badge="notices" hidden aria-label="0 new notices">0</span>
     </a>
     <a href="#highlights" class="app-bottom-link" data-nav-section="highlights" data-app-view="highlights">
       <span class="app-bottom-icon" aria-hidden="true">★</span>
       <span class="app-bottom-label">Priority</span>
+      <span class="app-nav-badge" data-update-badge="notices" hidden aria-label="0 new notices">0</span>
     </a>
     <a href="#calendar" class="app-bottom-link" data-nav-section="calendar" data-app-view="calendar">
       <span class="app-bottom-icon" aria-hidden="true">🗓</span>
       <span class="app-bottom-label">Calendar</span>
+      <span class="app-nav-badge" data-update-badge="calendar" hidden aria-label="0 new calendar entries">0</span>
     </a>
     <a href="#feedback" class="app-bottom-link" data-nav-section="feedback" data-app-view="feedback">
       <span class="app-bottom-icon" aria-hidden="true">✉</span>
@@ -271,6 +277,6 @@
     </div>
   </div>
 
-  <script src="app.js?v=20260727-calendar-manual1"></script>
+  <script src="app.js?v=20260730-app-badges1"></script>
 </body>
 </html>
