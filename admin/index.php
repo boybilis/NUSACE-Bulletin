@@ -445,8 +445,8 @@ try {
             }
 
             $boardIds = board_ids_for_role($role, $boardId !== '' ? [$boardId] : []);
-            if ($role === 'program_chair' && $boardIds === []) {
-                throw new RuntimeException('Program chair accounts must be assigned to a department.');
+            if (in_array($role, ['program_chair', 'student_officer'], true) && $boardIds === []) {
+                throw new RuntimeException('Program chair and student officer accounts must be assigned to a department.');
             }
 
             if ($isCreating && $defaultPassword === '') {
@@ -773,7 +773,7 @@ sort_notices($visibleNotices);
 
 $managedUsers = $allUsers;
 usort($managedUsers, static function (array $left, array $right): int {
-    $roleOrder = ['dean' => 0, 'admin' => 1, 'program_chair' => 2];
+    $roleOrder = ['dean' => 0, 'admin' => 1, 'program_chair' => 2, 'student_officer' => 2];
     $leftRole = $roleOrder[$left['role'] ?? 'program_chair'] ?? 99;
     $rightRole = $roleOrder[$right['role'] ?? 'program_chair'] ?? 99;
 
@@ -812,6 +812,8 @@ if (($user['role'] ?? '') === 'dean') {
             Dean access: publish and manage official announcements across all bulletin boards, and manage administrator accounts.
           <?php elseif (($user['role'] ?? '') === 'admin'): ?>
             Admin access: manage user accounts, departments, resets, and lock status.
+          <?php elseif (($user['role'] ?? '') === 'student_officer'): ?>
+            Student officer access: publish notices and calendar entries for your assigned academic department, and manage only the content you personally created.
           <?php else: ?>
             Program chair access: publish notices to your assigned academic board and manage only the notices you personally created.
           <?php endif; ?>
@@ -1015,7 +1017,7 @@ if (($user['role'] ?? '') === 'dean') {
                   </option>
                 <?php endforeach; ?>
               </select>
-              <small class="admin-field-help">Deans may post school-wide or departmental events. Program chairs may post only to their assigned board.</small>
+              <small class="admin-field-help">Deans may post school-wide or departmental events. Program chairs and student officers may post only to their assigned board.</small>
             </label>
 
             <label class="admin-field">
@@ -1225,7 +1227,7 @@ if (($user['role'] ?? '') === 'dean') {
                   </option>
                 <?php endforeach; ?>
               </select>
-              <small class="admin-field-help">Required for program chair accounts. Dean gets all departments. Admin gets none.</small>
+              <small class="admin-field-help">Required for program chair and student officer accounts. Dean gets all departments. Admin gets none.</small>
             </label>
 
             <label class="admin-field">

@@ -20,7 +20,7 @@ CREATE TABLE `users` (
   `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
   `username` VARCHAR(100) NOT NULL,
   `name` VARCHAR(255) NOT NULL,
-  `role` ENUM('dean', 'admin', 'program_chair') NOT NULL,
+  `role` ENUM('dean', 'admin', 'program_chair', 'student_officer') NOT NULL,
   `default_username` VARCHAR(100) NOT NULL,
   `default_password_hash` VARCHAR(255) NOT NULL,
   `password_hash` VARCHAR(255) NOT NULL,

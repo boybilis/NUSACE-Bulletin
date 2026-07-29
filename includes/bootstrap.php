@@ -1711,6 +1711,7 @@ function role_options(): array
         'dean' => 'Dean',
         'admin' => 'Admin',
         'program_chair' => 'Program Chair',
+        'student_officer' => 'Student Officer',
     ];
 }
 
@@ -1726,12 +1727,12 @@ function can_manage_users(array $user): bool
 
 function can_manage_notice_module(array $user): bool
 {
-    return in_array((string) ($user['role'] ?? ''), ['dean', 'program_chair'], true);
+    return in_array((string) ($user['role'] ?? ''), ['dean', 'program_chair', 'student_officer'], true);
 }
 
 function can_manage_calendar_module(array $user): bool
 {
-    return in_array((string) ($user['role'] ?? ''), ['dean', 'program_chair'], true);
+    return in_array((string) ($user['role'] ?? ''), ['dean', 'program_chair', 'student_officer'], true);
 }
 
 function can_manage_calendar_board(array $user, string $boardId): bool
@@ -1840,7 +1841,7 @@ function user_has_totp_enabled(array $user): bool
 
 function user_requires_totp(array $user): bool
 {
-    return in_array((string) ($user['role'] ?? ''), ['dean', 'admin', 'program_chair'], true);
+    return in_array((string) ($user['role'] ?? ''), ['dean', 'admin', 'program_chair', 'student_officer'], true);
 }
 
 function pending_totp_setup_key(string $username): string

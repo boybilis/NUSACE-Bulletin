@@ -1,7 +1,7 @@
 USE `nusace_bulletin`;
 
 ALTER TABLE `users`
-  MODIFY `role` ENUM('dean', 'admin', 'program_chair') NOT NULL;
+  MODIFY `role` ENUM('dean', 'admin', 'program_chair', 'student_officer') NOT NULL;
 
 ALTER TABLE `users`
   ADD COLUMN IF NOT EXISTS `is_locked` TINYINT(1) NOT NULL DEFAULT 0 AFTER `password_hash`;

@@ -102,7 +102,7 @@ $totpStep = $pendingUser !== null || (($_GET['step'] ?? '') === 'totp');
     <section class="admin-login-card glass-panel">
       <p class="eyebrow">Bulletin Administrator Access</p>
       <h1>NU Lipa SACE Bulletin Board</h1>
-      <p class="admin-intro">Authorized academic administrators may publish official announcements and notices for faculty and students. Program chairs manage their assigned board, the Dean oversees bulletin boards, and admin users manage user accounts.</p>
+      <p class="admin-intro">Authorized academic administrators may publish official announcements and notices for faculty and students. Program chairs and student officers manage their assigned board, the Dean oversees bulletin boards, and admin users manage user accounts.</p>
 
       <?php if ($error !== ''): ?>
         <p class="admin-alert"><?= e($error) ?></p>
