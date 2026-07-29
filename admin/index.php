@@ -1173,6 +1173,20 @@ if (($user['role'] ?? '') === 'dean') {
             <?php endif; ?>
           <?php endif; ?>
         </div>
+
+        <?php if (($user['role'] ?? '') === 'admin' && (!$totpRequired || $totpEnabled)): ?>
+          <div class="admin-feedback-block">
+            <p class="eyebrow">Database Backup</p>
+            <h2>Download a complete copy of the website data</h2>
+            <p class="admin-notice-meta">Creates a timestamped SQL file containing the current database structure and records. Store the downloaded file securely because it includes administrator accounts and submitted feedback.</p>
+            <form method="post" action="backup.php" class="admin-form-stack">
+              <input type="hidden" name="csrf_token" value="<?= e(csrf_token()) ?>">
+              <div class="admin-actions">
+                <button type="submit" class="install-btn admin-submit">Backup Data</button>
+              </div>
+            </form>
+          </div>
+        <?php endif; ?>
       </article>
 
       <?php if ($canManageUsers && (!$totpRequired || $totpEnabled)): ?>
@@ -1321,6 +1335,14 @@ if (($user['role'] ?? '') === 'dean') {
             </table>
           </div>
           <p class="admin-table-scrollhint admin-user-table-scrollhint">Search or scroll horizontally to review users and account actions.</p>
+          <div class="admin-table-pagination" id="adminUserPagination" hidden>
+            <p class="admin-table-pageinfo" id="adminUserPageInfo">Showing 0 to 0 of 0 users</p>
+            <div class="admin-table-pageactions">
+              <button type="button" class="secondary-link admin-table-link" id="adminUserPrev">Previous</button>
+              <div class="admin-table-pages" id="adminUserPages"></div>
+              <button type="button" class="secondary-link admin-table-link" id="adminUserNext">Next</button>
+            </div>
+          </div>
 
           <?php if (($user['role'] ?? '') === 'dean'): ?>
             <?php foreach ($managedUsers as $account): ?>
@@ -1366,21 +1388,6 @@ if (($user['role'] ?? '') === 'dean') {
       <?php endif; ?>
     </section>
 
-    <?php if (($user['role'] ?? '') === 'admin' && (!$totpRequired || $totpEnabled)): ?>
-      <section class="admin-grid">
-        <article class="admin-editor glass-panel">
-          <p class="eyebrow">Database Backup</p>
-          <h2>Download a complete copy of the website data</h2>
-          <p class="admin-notice-meta">Creates a timestamped SQL file containing the current database structure and records. Store the downloaded file securely because it includes administrator accounts and submitted feedback.</p>
-          <form method="post" action="backup.php" class="admin-form-stack">
-            <input type="hidden" name="csrf_token" value="<?= e(csrf_token()) ?>">
-            <div class="admin-actions">
-              <button type="submit" class="install-btn admin-submit">Backup Data</button>
-            </div>
-          </form>
-        </article>
-      </section>
-    <?php endif; ?>
   </main>
 
   <div class="attachment-modal" id="adminNoticeModal" hidden>
@@ -1708,29 +1715,98 @@ if (($user['role'] ?? '') === 'dean') {
       const searchInput = document.getElementById('adminUserSearch');
       const tableBody = document.getElementById('adminUserTableBody');
       const emptyRow = document.getElementById('adminUserEmptyRow');
-      if (!searchInput || !tableBody || !emptyRow) {
+      const paginationWrap = document.getElementById('adminUserPagination');
+      const pageInfo = document.getElementById('adminUserPageInfo');
+      const pageButtons = document.getElementById('adminUserPages');
+      const prevButton = document.getElementById('adminUserPrev');
+      const nextButton = document.getElementById('adminUserNext');
+      if (
+        !searchInput
+        || !tableBody
+        || !emptyRow
+        || !paginationWrap
+        || !pageInfo
+        || !pageButtons
+        || !prevButton
+        || !nextButton
+      ) {
         return;
       }
 
       const userRows = Array.from(tableBody.querySelectorAll('[data-user-row]'));
+      const pageSize = 5;
+      let currentPage = 1;
+      let filteredRows = [...userRows];
+
+      function renderPage() {
+        const totalItems = filteredRows.length;
+        const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
+        currentPage = Math.min(Math.max(1, currentPage), totalPages);
+        const pageStart = (currentPage - 1) * pageSize;
+        const pageEnd = Math.min(totalItems, pageStart + pageSize);
+        const visibleRows = new Set(filteredRows.slice(pageStart, pageEnd));
+
+        userRows.forEach((row) => {
+          row.hidden = !visibleRows.has(row);
+        });
+
+        emptyRow.hidden = totalItems !== 0;
+        pageInfo.textContent = `Showing ${totalItems === 0 ? 0 : pageStart + 1} to ${pageEnd} of ${totalItems} user${totalItems === 1 ? '' : 's'}`;
+        paginationWrap.hidden = totalItems <= pageSize;
+        prevButton.disabled = currentPage <= 1;
+        nextButton.disabled = currentPage >= totalPages;
+
+        pageButtons.innerHTML = Array.from({ length: totalPages }, (_, index) => index + 1)
+          .map((page) => (
+            `<button type="button" class="admin-table-pagebtn${page === currentPage ? ' is-active' : ''}" data-user-page="${page}">${page}</button>`
+          ))
+          .join('');
+      }
 
       function filterUsers() {
         const query = searchInput.value.trim().toLowerCase();
-        let visibleCount = 0;
-
-        userRows.forEach((row) => {
+        filteredRows = userRows.filter((row) => {
           const searchableText = row.dataset.userSearch || (row.textContent || '').toLowerCase();
-          const matches = query === '' || searchableText.includes(query);
-          row.hidden = !matches;
-          if (matches) {
-            visibleCount += 1;
-          }
+          return query === '' || searchableText.includes(query);
         });
-
-        emptyRow.hidden = visibleCount !== 0;
+        currentPage = 1;
+        renderPage();
       }
 
+      pageButtons.addEventListener('click', (event) => {
+        const target = event.target;
+        if (!(target instanceof HTMLElement)) {
+          return;
+        }
+
+        const page = Number.parseInt(target.dataset.userPage || '', 10);
+        if (!Number.isInteger(page) || page < 1) {
+          return;
+        }
+
+        currentPage = page;
+        renderPage();
+      });
+
+      prevButton.addEventListener('click', () => {
+        if (currentPage <= 1) {
+          return;
+        }
+        currentPage -= 1;
+        renderPage();
+      });
+
+      nextButton.addEventListener('click', () => {
+        const totalPages = Math.max(1, Math.ceil(filteredRows.length / pageSize));
+        if (currentPage >= totalPages) {
+          return;
+        }
+        currentPage += 1;
+        renderPage();
+      });
+
       searchInput.addEventListener('input', filterUsers);
+      renderPage();
     })();
   </script>
 </body>
