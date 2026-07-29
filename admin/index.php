@@ -808,7 +808,7 @@ if (($user['role'] ?? '') === 'dean') {
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Admin Dashboard | NU LIPA SACE</title>
-  <link rel="stylesheet" href="../styles.css?v=20260729-admin-user-table2">
+  <link rel="stylesheet" href="../styles.css?v=20260729-admin-table-badges1">
 </head>
 <body class="admin-body">
   <main class="admin-shell">
@@ -1302,24 +1302,24 @@ if (($user['role'] ?? '') === 'dean') {
                     <td data-label="Actions">
                       <div class="admin-table-actions">
                         <?php if (!$isCurrentAccount): ?>
-                          <a class="admin-user-action-badge is-edit" href="index.php?user_edit=<?= urlencode((string) $account['username']) ?>">Edit</a>
+                          <a class="admin-action-badge is-edit" href="index.php?user_edit=<?= urlencode((string) $account['username']) ?>">Edit</a>
                           <form method="post" class="admin-inline-form" onsubmit="return confirm('Reset this account to its default username and password?');">
                             <input type="hidden" name="csrf_token" value="<?= e(csrf_token()) ?>">
                             <input type="hidden" name="action" value="reset_managed_user_account">
                             <input type="hidden" name="target_username" value="<?= e((string) $account['username']) ?>">
-                            <button type="submit" class="admin-user-action-badge is-reset">Reset</button>
+                            <button type="submit" class="admin-action-badge is-reset">Reset</button>
                           </form>
                           <form method="post" class="admin-inline-form" onsubmit="return confirm('Change this user lock status?');">
                             <input type="hidden" name="csrf_token" value="<?= e(csrf_token()) ?>">
                             <input type="hidden" name="action" value="toggle_managed_user_lock">
                             <input type="hidden" name="target_username" value="<?= e((string) $account['username']) ?>">
-                            <button type="submit" class="admin-user-action-badge <?= !empty($account['is_locked']) ? 'is-unlock' : 'is-lock' ?>"><?= !empty($account['is_locked']) ? 'Unlock' : 'Lock' ?></button>
+                            <button type="submit" class="admin-action-badge <?= !empty($account['is_locked']) ? 'is-unlock' : 'is-lock' ?>"><?= !empty($account['is_locked']) ? 'Unlock' : 'Lock' ?></button>
                           </form>
                           <form method="post" class="admin-inline-form" onsubmit="return confirm('Reset this user\\'s authenticator setup?');">
                             <input type="hidden" name="csrf_token" value="<?= e(csrf_token()) ?>">
                             <input type="hidden" name="action" value="reset_managed_user_totp">
                             <input type="hidden" name="target_username" value="<?= e((string) $account['username']) ?>">
-                            <button type="submit" class="admin-user-action-badge is-2fa">Reset 2FA</button>
+                            <button type="submit" class="admin-action-badge is-2fa">Reset 2FA</button>
                           </form>
                         <?php else: ?>
                           <span class="admin-notice-meta">Use Account Settings</span>
@@ -1545,9 +1545,9 @@ if (($user['role'] ?? '') === 'dean') {
             <td>${escapeHtml(notice.status || '')}</td>
             <td>
               <div class="admin-table-actions">
-                <button type="button" class="secondary-link admin-table-link" data-action="view" data-id="${escapeHtml(notice.id || '')}">View</button>
-                <a class="secondary-link admin-table-link" href="${escapeHtml(notice.edit_url || '#')}">Edit</a>
-                <button type="button" class="admin-delete-btn admin-table-delete" data-action="delete" data-id="${escapeHtml(notice.id || '')}">Delete</button>
+                <button type="button" class="admin-action-badge is-view" data-action="view" data-id="${escapeHtml(notice.id || '')}">View</button>
+                <a class="admin-action-badge is-edit" href="${escapeHtml(notice.edit_url || '#')}">Edit</a>
+                <button type="button" class="admin-action-badge is-delete" data-action="delete" data-id="${escapeHtml(notice.id || '')}">Delete</button>
               </div>
             </td>
           </tr>

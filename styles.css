@@ -1200,7 +1200,7 @@ main {
   min-width: 300px;
 }
 
-.admin-user-action-badge {
+.admin-action-badge {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1217,38 +1217,40 @@ main {
   cursor: pointer;
 }
 
-.admin-user-action-badge.is-edit {
+.admin-action-badge.is-view,
+.admin-action-badge.is-edit {
   color: #003a70;
   background: rgba(0, 58, 112, 0.1);
   border-color: rgba(0, 58, 112, 0.14);
 }
 
-.admin-user-action-badge.is-reset {
+.admin-action-badge.is-reset {
   color: #765a00;
   background: rgba(183, 141, 0, 0.12);
   border-color: rgba(183, 141, 0, 0.18);
 }
 
-.admin-user-action-badge.is-lock {
+.admin-action-badge.is-lock,
+.admin-action-badge.is-delete {
   color: #7b1720;
   background: rgba(175, 32, 32, 0.1);
   border-color: rgba(175, 32, 32, 0.16);
 }
 
-.admin-user-action-badge.is-unlock {
+.admin-action-badge.is-unlock {
   color: #15562b;
   background: rgba(27, 125, 62, 0.1);
   border-color: rgba(27, 125, 62, 0.16);
 }
 
-.admin-user-action-badge.is-2fa {
+.admin-action-badge.is-2fa {
   color: #5b2a72;
   background: rgba(91, 42, 114, 0.1);
   border-color: rgba(91, 42, 114, 0.16);
 }
 
-.admin-user-action-badge:hover,
-.admin-user-action-badge:focus-visible {
+.admin-action-badge:hover,
+.admin-action-badge:focus-visible {
   filter: brightness(0.94);
 }
 
