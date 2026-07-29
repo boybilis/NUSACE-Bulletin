@@ -1332,6 +1332,22 @@ if (($user['role'] ?? '') === 'dean') {
         </article>
       <?php endif; ?>
     </section>
+
+    <?php if (($user['role'] ?? '') === 'admin' && (!$totpRequired || $totpEnabled)): ?>
+      <section class="admin-grid">
+        <article class="admin-editor glass-panel">
+          <p class="eyebrow">Database Backup</p>
+          <h2>Download a complete copy of the website data</h2>
+          <p class="admin-notice-meta">Creates a timestamped SQL file containing the current database structure and records. Store the downloaded file securely because it includes administrator accounts and submitted feedback.</p>
+          <form method="post" action="backup.php" class="admin-form-stack">
+            <input type="hidden" name="csrf_token" value="<?= e(csrf_token()) ?>">
+            <div class="admin-actions">
+              <button type="submit" class="install-btn admin-submit">Backup Data</button>
+            </div>
+          </form>
+        </article>
+      </section>
+    <?php endif; ?>
   </main>
 
   <div class="attachment-modal" id="adminNoticeModal" hidden>
