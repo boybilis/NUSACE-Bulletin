@@ -235,13 +235,12 @@ body::before {
 }
 
 .hero-copy,
-.hero-stats,
 .board-panel {
   border-radius: var(--radius-lg);
 }
 
 .hero-copy {
-  flex: 1.3;
+  flex: 1 1 100%;
   padding: 28px;
 }
 
@@ -255,32 +254,6 @@ body::before {
 .hero-actions {
   flex-wrap: wrap;
   margin-top: 24px;
-}
-
-.hero-stats {
-  flex: 0.85;
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 14px;
-  padding: 20px;
-}
-
-.hero-stats div {
-  padding: 20px 14px;
-  border-radius: 22px;
-  background: rgba(255, 255, 255, 0.46);
-  text-align: center;
-}
-
-.hero-stats span {
-  display: block;
-  font-family: "Fraunces", serif;
-  font-size: 2rem;
-  color: var(--navy);
-}
-
-.hero-stats p {
-  margin: 8px 0 0;
 }
 
 .news-section {
@@ -1054,9 +1027,7 @@ main {
 }
 
 .highlight-card p,
-.highlight-card .notice-date,
-.hero-stats div,
-.hero-stats p {
+.highlight-card .notice-date {
   color: rgba(16, 35, 59, 0.9);
 }
 
@@ -1751,10 +1722,6 @@ main {
     display: grid;
   }
 
-  .hero-stats {
-    grid-template-columns: repeat(3, 1fr);
-  }
-
   .news-carousel-slide {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     grid-template-rows: repeat(2, minmax(0, 1fr));
@@ -1788,7 +1755,6 @@ main {
     flex-direction: column;
   }
 
-  .hero-stats,
   .highlight-strip,
   .notice-grid {
     grid-template-columns: 1fr;
