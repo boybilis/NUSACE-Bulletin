@@ -299,8 +299,6 @@ body::before {
 
 .news-carousel {
   position: relative;
-  padding: 20px;
-  border-radius: var(--radius-lg);
   overflow: hidden;
 }
 
@@ -1794,10 +1792,6 @@ main {
   .highlight-strip,
   .notice-grid {
     grid-template-columns: 1fr;
-  }
-
-  .news-carousel {
-    padding: 14px;
   }
 
   .news-carousel-slide {
